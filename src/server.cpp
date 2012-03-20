@@ -180,6 +180,7 @@ void * EmergeThread::Thread()
 		if(qptr == NULL)
 			break;
 		
+    g_profiler->add("EmergeThread: blocks emerged", 1);
 		SharedPtr<QueuedBlockEmerge> q(qptr);
 
 		v3s16 &p = q->pos;
@@ -286,6 +287,7 @@ void * EmergeThread::Thread()
 						SPT_AVG);
 				TimeTaker t("mapgen::make_block()");
 
+        g_profiler->add("EmergeThread: blocks generated", 1);
 				mapgen::make_block(&data);
 
 				if(enable_mapgen_debug_info == false)
