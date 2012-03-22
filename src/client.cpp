@@ -62,8 +62,7 @@ struct MediaRequest
 
 QueuedMeshUpdate::QueuedMeshUpdate():
 	p(-1337,-1337,-1337),
-	data(NULL),
-	ack_block_to_server(false)
+	data(NULL)
 {
 }
 
@@ -98,7 +97,7 @@ MeshUpdateQueue::~MeshUpdateQueue()
 /*
 	peer_id=0 adds with nobody to send to
 */
-void MeshUpdateQueue::addBlock(v3s16 p, MeshMakeData *data, bool ack_block_to_server, bool urgent)
+void MeshUpdateQueue::addBlock(v3s16 p, MeshMakeData *data, bool urgent)
 {
 	DSTACK(__FUNCTION_NAME);
 
@@ -123,8 +122,6 @@ void MeshUpdateQueue::addBlock(v3s16 p, MeshMakeData *data, bool ack_block_to_se
 			if(q->data)
 				delete q->data;
 			q->data = data;
-			if(ack_block_to_server)
-				q->ack_block_to_server = true;
 			return;
 		}
 	}
@@ -135,7 +132,6 @@ void MeshUpdateQueue::addBlock(v3s16 p, MeshMakeData *data, bool ack_block_to_se
 	QueuedMeshUpdate *q = new QueuedMeshUpdate;
 	q->p = p;
 	q->data = data;
-	q->ack_block_to_server = ack_block_to_server;
 	m_queue.push_back(q);
 }
 
@@ -204,7 +200,6 @@ void * MeshUpdateThread::Thread()
 		MeshUpdateResult r;
 		r.p = q->p;
 		r.mesh = mesh_new;
-		r.ack_block_to_server = q->ack_block_to_server;
 
 		/*infostream<<"MeshUpdateThread: Processed "
 				<<"("<<q->p.X<<","<<q->p.Y<<","<<q->p.Z<<")"
@@ -273,6 +268,7 @@ Client::Client(
 	m_avg_rtt_timer = 0.0;
 	m_playerpos_send_timer = 0.0;
 	m_ignore_damage_timer = 0.0;
+  m_request_blocks_timer = 0.0;
 
 	// Build main texture atlas, now that the GameDef exists (that is, us)
 	if(g_settings->getBool("enable_texture_atlas"))
@@ -542,50 +538,6 @@ void Client::step(float dtime)
 		/*if(deleted_blocks.size() > 0)
 			infostream<<"Client: Unloaded "<<deleted_blocks.size()
 					<<" unused blocks"<<std::endl;*/
-			
-		/*
-			Send info to server
-			NOTE: This loop is intentionally iterated the way it is.
-		*/
-
-		core::list<v3s16>::Iterator i = deleted_blocks.begin();
-		core::list<v3s16> sendlist;
-		for(;;)
-		{
-			if(sendlist.size() == 255 || i == deleted_blocks.end())
-			{
-				if(sendlist.size() == 0)
-					break;
-				/*
-					[0] u16 command
-					[2] u8 count
-					[3] v3s16 pos_0
-					[3+6] v3s16 pos_1
-					...
-				*/
-				u32 replysize = 2+1+6*sendlist.size();
-				SharedBuffer<u8> reply(replysize);
-				writeU16(&reply[0], TOSERVER_DELETEDBLOCKS);
-				reply[2] = sendlist.size();
-				u32 k = 0;
-				for(core::list<v3s16>::Iterator
-						j = sendlist.begin();
-						j != sendlist.end(); j++)
-				{
-					writeV3S16(&reply[2+1+6*k], *j);
-					k++;
-				}
-				m_con.Send(PEER_ID_SERVER, 1, reply, true);
-
-				if(i == deleted_blocks.end())
-					break;
-
-				sendlist.clear();
-			}
-
-			sendlist.push_back(*i);
-			i++;
-		}
 	}
 
 	/*
@@ -650,6 +602,19 @@ void Client::step(float dtime)
 	}
 
 	/*
+    Request nearby blocks
+  */
+  {
+    float &counter = m_request_blocks_timer;
+    counter += dtime;
+    if (counter >= 3)
+    {
+      counter = 0.0;
+      sendRequestForNearbyBlocks();
+    }
+  }
+
+	/*
 		Send player position to server
 	*/
 	{
@@ -695,28 +660,6 @@ void Client::step(float dtime)
 
 				// Replace with the new mesh
 				block->mesh = r.mesh;
-			}
-			if(r.ack_block_to_server)
-			{
-				/*infostream<<"Client: ACK block ("<<r.p.X<<","<<r.p.Y
-						<<","<<r.p.Z<<")"<<std::endl;*/
-				/*
-					Acknowledge block
-				*/
-				/*
-					[0] u16 command
-					[2] u8 count
-					[3] v3s16 pos_0
-					[3+6] v3s16 pos_1
-					...
-				*/
-				u32 replysize = 2+1+6;
-				SharedBuffer<u8> reply(replysize);
-				writeU16(&reply[0], TOSERVER_GOTBLOCKS);
-				reply[2] = 1;
-				writeV3S16(&reply[3], r.p);
-				// Send as reliable
-				m_con.Send(PEER_ID_SERVER, 1, reply, true);
 			}
 		}
 		if(num_processed_meshes > 0)
@@ -2004,6 +1947,40 @@ void Client::sendPlayerItem(u16 item)
 	Send(0, data, true);
 }
 
+void Client::sendRequestForNearbyBlocks()
+{
+  // FIXME Temporary hack
+  u16 near_dist = 2;
+  u16 request_width = near_dist*2 + 1;
+  u16 request_blocks = request_width*request_width*request_width;
+  verbosestream<<"Client: Requesting "<<(int)(request_blocks)<<" nearby blocks"<<std::endl;
+
+  std::ostringstream os(std::ios_base::binary);
+  u8 buf[12];
+
+  // Write command
+  writeU16(buf, TOSERVER_REQUEST_BLOCKS);
+  os.write((char*)buf, 2);
+
+  writeU16(buf, request_blocks);
+  os.write((char*)buf, 2);
+
+  for(int x = -near_dist; x <= near_dist; ++x) {
+    for(int y = -near_dist; y <= near_dist; ++y) {
+      for(int z = -near_dist; z <= near_dist; ++z) {
+        v3s16 p(x, y, z);
+        writeV3S16(buf, p);
+        os.write((char*)buf, 6);
+      }
+    }
+  }
+
+	std::string s = os.str();
+	SharedBuffer<u8> data((u8*)s.c_str(), s.size());
+	// Send as unreliable
+	Send(0, data, false);
+}
+
 void Client::removeNode(v3s16 p)
 {
 	core::map<v3s16, MapBlock*> modified_blocks;
@@ -2018,7 +1995,7 @@ void Client::removeNode(v3s16 p)
 	}
 	
 	// add urgent task to update the modified node
-	addUpdateMeshTaskForNode(p, false, true);
+	addUpdateMeshTaskForNode(p, true);
 
 	for(core::map<v3s16, MapBlock * >::Iterator
 			i = modified_blocks.getIterator();
@@ -2230,12 +2207,12 @@ void Client::setCrack(int level, v3s16 pos)
 	if(old_crack_level >= 0 && (level < 0 || pos != old_crack_pos))
 	{
 		// remove old crack
-		addUpdateMeshTaskForNode(old_crack_pos, false, true);
+		addUpdateMeshTaskForNode(old_crack_pos, true);
 	}
 	if(level >= 0 && (old_crack_level < 0 || pos != old_crack_pos))
 	{
 		// add new crack
-		addUpdateMeshTaskForNode(pos, false, true);
+		addUpdateMeshTaskForNode(pos, true);
 	}
 }
 
@@ -2279,11 +2256,10 @@ void Client::typeChatMessage(const std::wstring &message)
 	}
 }
 
-void Client::addUpdateMeshTask(v3s16 p, bool ack_to_server, bool urgent)
+void Client::addUpdateMeshTask(v3s16 p, bool urgent)
 {
 	/*infostream<<"Client::addUpdateMeshTask(): "
 			<<"("<<p.X<<","<<p.Y<<","<<p.Z<<")"
-			<<" ack_to_server="<<ack_to_server
 			<<" urgent="<<urgent
 			<<std::endl;*/
 
@@ -2310,14 +2286,14 @@ void Client::addUpdateMeshTask(v3s16 p, bool ack_to_server, bool urgent)
 	//while(m_mesh_update_thread.m_queue_in.size() > 0) sleep_ms(10);
 	
 	// Add task to queue
-	m_mesh_update_thread.m_queue_in.addBlock(p, data, ack_to_server, urgent);
+	m_mesh_update_thread.m_queue_in.addBlock(p, data, urgent);
 
 	/*infostream<<"Mesh update input queue size is "
 			<<m_mesh_update_thread.m_queue_in.size()
 			<<std::endl;*/
 }
 
-void Client::addUpdateMeshTaskWithEdge(v3s16 blockpos, bool ack_to_server, bool urgent)
+void Client::addUpdateMeshTaskWithEdge(v3s16 blockpos, bool urgent)
 {
 	/*{
 		v3s16 p = blockpos;
@@ -2329,28 +2305,28 @@ void Client::addUpdateMeshTaskWithEdge(v3s16 blockpos, bool ack_to_server, bool 
 	try{
 		v3s16 p = blockpos + v3s16(0,0,0);
 		//MapBlock *b = m_env.getMap().getBlockNoCreate(p);
-		addUpdateMeshTask(p, ack_to_server, urgent);
+		addUpdateMeshTask(p, urgent);
 	}
 	catch(InvalidPositionException &e){}
 	// Leading edge
 	try{
 		v3s16 p = blockpos + v3s16(-1,0,0);
-		addUpdateMeshTask(p, false, urgent);
+		addUpdateMeshTask(p, urgent);
 	}
 	catch(InvalidPositionException &e){}
 	try{
 		v3s16 p = blockpos + v3s16(0,-1,0);
-		addUpdateMeshTask(p, false, urgent);
+		addUpdateMeshTask(p, urgent);
 	}
 	catch(InvalidPositionException &e){}
 	try{
 		v3s16 p = blockpos + v3s16(0,0,-1);
-		addUpdateMeshTask(p, false, urgent);
+		addUpdateMeshTask(p, urgent);
 	}
 	catch(InvalidPositionException &e){}
 }
 
-void Client::addUpdateMeshTaskForNode(v3s16 nodepos, bool ack_to_server, bool urgent)
+void Client::addUpdateMeshTaskForNode(v3s16 nodepos, bool urgent)
 {
 	{
 		v3s16 p = nodepos;
@@ -2364,28 +2340,28 @@ void Client::addUpdateMeshTaskForNode(v3s16 nodepos, bool ack_to_server, bool ur
 
 	try{
 		v3s16 p = blockpos + v3s16(0,0,0);
-		addUpdateMeshTask(p, ack_to_server, urgent);
+		addUpdateMeshTask(p, urgent);
 	}
 	catch(InvalidPositionException &e){}
 	// Leading edge
 	if(nodepos.X == blockpos_relative.X){
 		try{
 			v3s16 p = blockpos + v3s16(-1,0,0);
-			addUpdateMeshTask(p, false, urgent);
+			addUpdateMeshTask(p, urgent);
 		}
 		catch(InvalidPositionException &e){}
 	}
 	if(nodepos.Y == blockpos_relative.Y){
 		try{
 			v3s16 p = blockpos + v3s16(0,-1,0);
-			addUpdateMeshTask(p, false, urgent);
+			addUpdateMeshTask(p, urgent);
 		}
 		catch(InvalidPositionException &e){}
 	}
 	if(nodepos.Z == blockpos_relative.Z){
 		try{
 			v3s16 p = blockpos + v3s16(0,0,-1);
-			addUpdateMeshTask(p, false, urgent);
+			addUpdateMeshTask(p, urgent);
 		}
 		catch(InvalidPositionException &e){}
 	}

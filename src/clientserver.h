@@ -353,7 +353,15 @@ enum ToServerCommand
 		[0] u16 TOSERVER_INIT2
 	*/
 
-	TOSERVER_GETBLOCK=0x20, // Obsolete
+	TOSERVER_REQUEST_BLOCKS=0x20,
+  /*
+		u16 command
+		u8 number of blocks requested
+		for each block {
+      v3s16 blockpos
+		}
+  */
+
 	TOSERVER_ADDNODE = 0x21, // Obsolete
 	TOSERVER_REMOVENODE = 0x22, // Obsolete
 
@@ -366,7 +374,7 @@ enum ToServerCommand
 		[2+12+12+4] s32 yaw*100
 	*/
 
-	TOSERVER_GOTBLOCKS = 0x24,
+	TOSERVER_GOTBLOCKS = 0x24, // Obsolete
 	/*
 		[0] u16 command
 		[2] u8 count
@@ -375,7 +383,7 @@ enum ToServerCommand
 		...
 	*/
 
-	TOSERVER_DELETEDBLOCKS = 0x25,
+	TOSERVER_DELETEDBLOCKS = 0x25, // Obsolete
 	/*
 		[0] u16 command
 		[2] u8 count

@@ -234,10 +234,9 @@ void * EmergeThread::Thread()
 					<<"only_from_disk="<<only_from_disk<<std::endl;
 		
 		ServerMap &map = ((ServerMap&)m_server->m_env->getMap());
-			
+
 		MapBlock *block = NULL;
-		bool got_block = true;
-		core::map<v3s16, MapBlock*> modified_blocks;
+		core::map<v3s16, MapBlock*> modified_blocks; // FIXME Do we need this?
 
 		/*
 			Try to fetch block from memory or disk.
@@ -346,41 +345,6 @@ void * EmergeThread::Thread()
 				m_server->m_env->activateBlock(block, 0);
 			}while(false);
 		}
-
-		if(block == NULL)
-			got_block = false;
-			
-		/*
-			Set sent status of modified blocks on clients
-		*/
-	
-		// NOTE: Server's clients are also behind the connection mutex
-		JMutexAutoLock lock(m_server->m_con_mutex);
-
-		/*
-			Add the originally fetched block to the modified list
-		*/
-		if(got_block)
-		{
-			modified_blocks.insert(p, block);
-		}
-		
-		/*
-			Set the modified blocks unsent for all the clients
-		*/
-		
-		for(core::map<u16, RemoteClient*>::Iterator
-				i = m_server->m_clients.getIterator();
-				i.atEnd() == false; i++)
-		{
-			RemoteClient *client = i.getNode()->getValue();
-			
-			if(modified_blocks.size() > 0)
-			{
-				// Remove block from sent history
-				client->SetBlocksNotSent(modified_blocks);
-			}
-		}
 	}
 	catch(VersionMismatchException &e)
 	{
@@ -429,471 +393,6 @@ v3f ServerSoundParams::getPos(ServerEnvironment *env, bool *pos_exists) const
 		return sao->getBasePosition(); }
 	}
 	return v3f(0,0,0);
-}
-
-void RemoteClient::GetNextBlocks(Server *server, float dtime,
-		core::array<PrioritySortedBlockTransfer> &dest)
-{
-	DSTACK(__FUNCTION_NAME);
-	
-	/*u32 timer_result;
-	TimeTaker timer("RemoteClient::GetNextBlocks", &timer_result);*/
-	
-	// Increment timers
-	m_nothing_to_send_pause_timer -= dtime;
-	m_nearest_unsent_reset_timer += dtime;
-	
-	if(m_nothing_to_send_pause_timer >= 0)
-		return;
-
-	Player *player = server->m_env->getPlayer(peer_id);
-	// This can happen sometimes; clients and players are not in perfect sync.
-	if(player == NULL)
-		return;
-
-	// Won't send anything if already sending
-	if(m_blocks_sending.size() >= g_settings->getU16
-			("max_simultaneous_block_sends_per_client"))
-	{
-		//infostream<<"Not sending any blocks, Queue full."<<std::endl;
-		return;
-	}
-
-	//TimeTaker timer("RemoteClient::GetNextBlocks");
-	
-	v3f playerpos = player->getPosition();
-	v3f playerspeed = player->getSpeed();
-	v3f playerspeeddir(0,0,0);
-	if(playerspeed.getLength() > 1.0*BS)
-		playerspeeddir = playerspeed / playerspeed.getLength();
-	// Predict to next block
-	v3f playerpos_predicted = playerpos + playerspeeddir*MAP_BLOCKSIZE*BS;
-
-	v3s16 center_nodepos = floatToInt(playerpos_predicted, BS);
-
-	v3s16 center = getNodeBlockPos(center_nodepos);
-	
-	// Camera position and direction
-	v3f camera_pos = player->getEyePosition();
-	v3f camera_dir = v3f(0,0,1);
-	camera_dir.rotateYZBy(player->getPitch());
-	camera_dir.rotateXZBy(player->getYaw());
-
-	/*infostream<<"camera_dir=("<<camera_dir.X<<","<<camera_dir.Y<<","
-			<<camera_dir.Z<<")"<<std::endl;*/
-
-	/*
-		Get the starting value of the block finder radius.
-	*/
-		
-	if(m_last_center != center)
-	{
-		m_nearest_unsent_d = 0;
-		m_last_center = center;
-	}
-
-	/*infostream<<"m_nearest_unsent_reset_timer="
-			<<m_nearest_unsent_reset_timer<<std::endl;*/
-			
-	// Reset periodically to workaround for some bugs or stuff
-	if(m_nearest_unsent_reset_timer > 20.0)
-	{
-		m_nearest_unsent_reset_timer = 0;
-		m_nearest_unsent_d = 0;
-		//infostream<<"Resetting m_nearest_unsent_d for "
-		//		<<server->getPlayerName(peer_id)<<std::endl;
-	}
-
-	//s16 last_nearest_unsent_d = m_nearest_unsent_d;
-	s16 d_start = m_nearest_unsent_d;
-
-	//infostream<<"d_start="<<d_start<<std::endl;
-
-	u16 max_simul_sends_setting = g_settings->getU16
-			("max_simultaneous_block_sends_per_client");
-	u16 max_simul_sends_usually = max_simul_sends_setting;
-
-	/*
-		Check the time from last addNode/removeNode.
-		
-		Decrease send rate if player is building stuff.
-	*/
-	m_time_from_building += dtime;
-	if(m_time_from_building < g_settings->getFloat(
-				"full_block_send_enable_min_time_from_building"))
-	{
-		max_simul_sends_usually
-			= LIMITED_MAX_SIMULTANEOUS_BLOCK_SENDS;
-	}
-	
-	/*
-		Number of blocks sending + number of blocks selected for sending
-	*/
-	u32 num_blocks_selected = m_blocks_sending.size();
-	
-	/*
-		next time d will be continued from the d from which the nearest
-		unsent block was found this time.
-
-		This is because not necessarily any of the blocks found this
-		time are actually sent.
-	*/
-	s32 new_nearest_unsent_d = -1;
-
-	s16 d_max = g_settings->getS16("max_block_send_distance");
-	s16 d_max_gen = g_settings->getS16("max_block_generate_distance");
-	
-	// Don't loop very much at a time
-	s16 max_d_increment_at_time = 2;
-	if(d_max > d_start + max_d_increment_at_time)
-		d_max = d_start + max_d_increment_at_time;
-	/*if(d_max_gen > d_start+2)
-		d_max_gen = d_start+2;*/
-	
-	//infostream<<"Starting from "<<d_start<<std::endl;
-
-	s32 nearest_emerged_d = -1;
-	s32 nearest_emergefull_d = -1;
-	s32 nearest_sent_d = -1;
-	bool queue_is_full = false;
-	
-	s16 d;
-	for(d = d_start; d <= d_max; d++)
-	{
-		/*errorstream<<"checking d="<<d<<" for "
-				<<server->getPlayerName(peer_id)<<std::endl;*/
-		//infostream<<"RemoteClient::SendBlocks(): d="<<d<<std::endl;
-		
-		/*
-			If m_nearest_unsent_d was changed by the EmergeThread
-			(it can change it to 0 through SetBlockNotSent),
-			update our d to it.
-			Else update m_nearest_unsent_d
-		*/
-		/*if(m_nearest_unsent_d != last_nearest_unsent_d)
-		{
-			d = m_nearest_unsent_d;
-			last_nearest_unsent_d = m_nearest_unsent_d;
-		}*/
-
-		/*
-			Get the border/face dot coordinates of a "d-radiused"
-			box
-		*/
-		core::list<v3s16> list;
-		getFacePositions(list, d);
-		
-		core::list<v3s16>::Iterator li;
-		for(li=list.begin(); li!=list.end(); li++)
-		{
-			v3s16 p = *li + center;
-			
-			/*
-				Send throttling
-				- Don't allow too many simultaneous transfers
-				- EXCEPT when the blocks are very close
-
-				Also, don't send blocks that are already flying.
-			*/
-			
-			// Start with the usual maximum
-			u16 max_simul_dynamic = max_simul_sends_usually;
-			
-			// If block is very close, allow full maximum
-			if(d <= BLOCK_SEND_DISABLE_LIMITS_MAX_D)
-				max_simul_dynamic = max_simul_sends_setting;
-
-			// Don't select too many blocks for sending
-			if(num_blocks_selected >= max_simul_dynamic)
-			{
-				queue_is_full = true;
-				goto queue_full_break;
-			}
-			
-			// Don't send blocks that are currently being transferred
-			if(m_blocks_sending.find(p) != NULL)
-				continue;
-		
-			/*
-				Do not go over-limit
-			*/
-			if(p.X < -MAP_GENERATION_LIMIT / MAP_BLOCKSIZE
-			|| p.X > MAP_GENERATION_LIMIT / MAP_BLOCKSIZE
-			|| p.Y < -MAP_GENERATION_LIMIT / MAP_BLOCKSIZE
-			|| p.Y > MAP_GENERATION_LIMIT / MAP_BLOCKSIZE
-			|| p.Z < -MAP_GENERATION_LIMIT / MAP_BLOCKSIZE
-			|| p.Z > MAP_GENERATION_LIMIT / MAP_BLOCKSIZE)
-				continue;
-		
-			// If this is true, inexistent block will be made from scratch
-			bool generate = d <= d_max_gen;
-			
-			{
-				/*// Limit the generating area vertically to 2/3
-				if(abs(p.Y - center.Y) > d_max_gen - d_max_gen / 3)
-					generate = false;*/
-
-				// Limit the send area vertically to 1/2
-				if(abs(p.Y - center.Y) > d_max / 2)
-					continue;
-			}
-
-#if 0
-			/*
-				If block is far away, don't generate it unless it is
-				near ground level.
-			*/
-			if(d >= 4)
-			{
-	#if 1
-				// Block center y in nodes
-				f32 y = (f32)(p.Y * MAP_BLOCKSIZE + MAP_BLOCKSIZE/2);
-				// Don't generate if it's very high or very low
-				if(y < -64 || y > 64)
-					generate = false;
-	#endif
-	#if 0
-				v2s16 p2d_nodes_center(
-					MAP_BLOCKSIZE*p.X,
-					MAP_BLOCKSIZE*p.Z);
-				
-				// Get ground height in nodes
-				s16 gh = server->m_env->getServerMap().findGroundLevel(
-						p2d_nodes_center);
-
-				// If differs a lot, don't generate
-				if(fabs(gh - y) > MAP_BLOCKSIZE*2)
-					generate = false;
-					// Actually, don't even send it
-					//continue;
-	#endif
-			}
-#endif
-
-			//infostream<<"d="<<d<<std::endl;
-#if 1
-			/*
-				Don't generate or send if not in sight
-				FIXME This only works if the client uses a small enough
-				FOV setting. The default of 72 degrees is fine.
-			*/
-
-			float camera_fov = (72.0*M_PI/180) * 4./3.;
-			if(isBlockInSight(p, camera_pos, camera_dir, camera_fov, 10000*BS) == false)
-			{
-				continue;
-			}
-#endif
-			/*
-				Don't send already sent blocks
-			*/
-			{
-				if(m_blocks_sent.find(p) != NULL)
-				{
-					continue;
-				}
-			}
-
-			/*
-				Check if map has this block
-			*/
-			MapBlock *block = server->m_env->getMap().getBlockNoCreateNoEx(p);
-			
-			bool surely_not_found_on_disk = false;
-			bool block_is_invalid = false;
-			if(block != NULL)
-			{
-				// Reset usage timer, this block will be of use in the future.
-				block->resetUsageTimer();
-
-				// Block is dummy if data doesn't exist.
-				// It means it has been not found from disk and not generated
-				if(block->isDummy())
-				{
-					surely_not_found_on_disk = true;
-				}
-				
-				// Block is valid if lighting is up-to-date and data exists
-				if(block->isValid() == false)
-				{
-					block_is_invalid = true;
-				}
-				
-				/*if(block->isFullyGenerated() == false)
-				{
-					block_is_invalid = true;
-				}*/
-
-#if 0
-				v2s16 p2d(p.X, p.Z);
-				ServerMap *map = (ServerMap*)(&server->m_env->getMap());
-				v2s16 chunkpos = map->sector_to_chunk(p2d);
-				if(map->chunkNonVolatile(chunkpos) == false)
-					block_is_invalid = true;
-#endif
-				if(block->isGenerated() == false)
-					block_is_invalid = true;
-#if 1
-				/*
-					If block is not close, don't send it unless it is near
-					ground level.
-
-					Block is near ground level if night-time mesh
-					differs from day-time mesh.
-				*/
-				if(d >= 4)
-				{
-					if(block->getDayNightDiff() == false)
-						continue;
-				}
-#endif
-			}
-
-			/*
-				If block has been marked to not exist on disk (dummy)
-				and generating new ones is not wanted, skip block.
-			*/
-			if(generate == false && surely_not_found_on_disk == true)
-			{
-				// get next one.
-				continue;
-			}
-
-			/*
-				Add inexistent block to emerge queue.
-			*/
-			if(block == NULL || surely_not_found_on_disk || block_is_invalid)
-			{
-				//TODO: Get value from somewhere
-				// Allow only one block in emerge queue
-				//if(server->m_emerge_queue.peerItemCount(peer_id) < 1)
-				// Allow two blocks in queue per client
-				//if(server->m_emerge_queue.peerItemCount(peer_id) < 2)
-				u32 max_emerge = 5;
-				// Make it more responsive when needing to generate stuff
-				if(surely_not_found_on_disk)
-					max_emerge = 1;
-				if(server->m_emerge_queue.peerItemCount(peer_id) < max_emerge)
-				{
-					//infostream<<"Adding block to emerge queue"<<std::endl;
-					
-					// Add it to the emerge queue and trigger the thread
-					
-					u8 flags = 0;
-					if(generate == false)
-						flags |= BLOCK_EMERGE_FLAG_FROMDISK;
-					
-					server->m_emerge_queue.addBlock(peer_id, p, flags);
-					server->m_emergethread.trigger();
-
-					if(nearest_emerged_d == -1)
-						nearest_emerged_d = d;
-				} else {
-					if(nearest_emergefull_d == -1)
-						nearest_emergefull_d = d;
-				}
-				
-				// get next one.
-				continue;
-			}
-
-			if(nearest_sent_d == -1)
-				nearest_sent_d = d;
-
-			/*
-				Add block to send queue
-			*/
-
-			/*errorstream<<"sending from d="<<d<<" to "
-					<<server->getPlayerName(peer_id)<<std::endl;*/
-
-			PrioritySortedBlockTransfer q((float)d, p, peer_id);
-
-			dest.push_back(q);
-
-			num_blocks_selected += 1;
-		}
-	}
-queue_full_break:
-
-	//infostream<<"Stopped at "<<d<<std::endl;
-	
-	// If nothing was found for sending and nothing was queued for
-	// emerging, continue next time browsing from here
-	if(nearest_emerged_d != -1){
-		new_nearest_unsent_d = nearest_emerged_d;
-	} else if(nearest_emergefull_d != -1){
-		new_nearest_unsent_d = nearest_emergefull_d;
-	} else {
-		if(d > g_settings->getS16("max_block_send_distance")){
-			new_nearest_unsent_d = 0;
-			m_nothing_to_send_pause_timer = 2.0;
-			/*infostream<<"GetNextBlocks(): d wrapped around for "
-					<<server->getPlayerName(peer_id)
-					<<"; setting to 0 and pausing"<<std::endl;*/
-		} else {
-			if(nearest_sent_d != -1)
-				new_nearest_unsent_d = nearest_sent_d;
-			else
-				new_nearest_unsent_d = d;
-		}
-	}
-
-	if(new_nearest_unsent_d != -1)
-		m_nearest_unsent_d = new_nearest_unsent_d;
-
-	/*timer_result = timer.stop(true);
-	if(timer_result != 0)
-		infostream<<"GetNextBlocks timeout: "<<timer_result<<" (!=0)"<<std::endl;*/
-}
-
-void RemoteClient::GotBlock(v3s16 p)
-{
-	if(m_blocks_sending.find(p) != NULL)
-		m_blocks_sending.remove(p);
-	else
-	{
-		/*infostream<<"RemoteClient::GotBlock(): Didn't find in"
-				" m_blocks_sending"<<std::endl;*/
-		m_excess_gotblocks++;
-	}
-	m_blocks_sent.insert(p, true);
-}
-
-void RemoteClient::SentBlock(v3s16 p)
-{
-	if(m_blocks_sending.find(p) == NULL)
-		m_blocks_sending.insert(p, 0.0);
-	else
-		infostream<<"RemoteClient::SentBlock(): Sent block"
-				" already in m_blocks_sending"<<std::endl;
-}
-
-void RemoteClient::SetBlockNotSent(v3s16 p)
-{
-	m_nearest_unsent_d = 0;
-	
-	if(m_blocks_sending.find(p) != NULL)
-		m_blocks_sending.remove(p);
-	if(m_blocks_sent.find(p) != NULL)
-		m_blocks_sent.remove(p);
-}
-
-void RemoteClient::SetBlocksNotSent(core::map<v3s16, MapBlock*> &blocks)
-{
-	m_nearest_unsent_d = 0;
-	
-	for(core::map<v3s16, MapBlock*>::Iterator
-			i = blocks.getIterator();
-			i.atEnd()==false; i++)
-	{
-		v3s16 p = i.getNode()->getKey();
-
-		if(m_blocks_sending.find(p) != NULL)
-			m_blocks_sending.remove(p);
-		if(m_blocks_sent.find(p) != NULL)
-			m_blocks_sent.remove(p);
-	}
 }
 
 /*
@@ -1252,12 +751,7 @@ void Server::AsyncRunStep()
 		JMutexAutoLock lock1(m_step_dtime_mutex);
 		dtime = m_step_dtime;
 	}
-	
-	{
-		// Send blocks to clients
-		SendBlocks(dtime);
-	}
-	
+
 	if(dtime < 0.001)
 		return;
 	
@@ -1397,7 +891,7 @@ void Server::AsyncRunStep()
 
 		ScopeProfiler sp(g_profiler, "Server: liquid transform");
 
-		core::map<v3s16, MapBlock*> modified_blocks;
+		core::map<v3s16, MapBlock*> modified_blocks; // FIXME Needed?
 		m_env->getMap().transformLiquids(modified_blocks);
 #if 0		
 		/*
@@ -1416,24 +910,6 @@ void Server::AsyncRunStep()
 			modified_blocks.insert(block->getPos(), block);
 		}
 #endif
-		/*
-			Set the modified blocks unsent for all the clients
-		*/
-		
-		JMutexAutoLock lock2(m_con_mutex);
-
-		for(core::map<u16, RemoteClient*>::Iterator
-				i = m_clients.getIterator();
-				i.atEnd() == false; i++)
-		{
-			RemoteClient *client = i.getNode()->getValue();
-			
-			if(modified_blocks.size() > 0)
-			{
-				// Remove block from sent history
-				client->SetBlocksNotSent(modified_blocks);
-			}
-		}
 	}
 
 	// Periodically print some info
@@ -1764,50 +1240,29 @@ void Server::AsyncRunStep()
 		{
 			MapEditEvent* event = m_unsent_map_edit_queue.pop_front();
 			
-			// Players far away from the change are stored here.
-			// Instead of sending the changes, MapBlocks are set not sent
-			// for them.
-			core::list<u16> far_players;
-
 			if(event->type == MEET_ADDNODE)
 			{
 				//infostream<<"Server: MEET_ADDNODE"<<std::endl;
 				prof.add("MEET_ADDNODE", 1);
-				if(disable_single_change_sending)
-					sendAddNode(event->p, event->n, event->already_known_by_peer,
-							&far_players, 5);
-				else
-					sendAddNode(event->p, event->n, event->already_known_by_peer,
-							&far_players, 30);
+        float max_d = disable_single_change_sending ? 5 : 30;
+				sendAddNode(event->p, event->n, event->already_known_by_peer, max_d);
 			}
 			else if(event->type == MEET_REMOVENODE)
 			{
 				//infostream<<"Server: MEET_REMOVENODE"<<std::endl;
 				prof.add("MEET_REMOVENODE", 1);
-				if(disable_single_change_sending)
-					sendRemoveNode(event->p, event->already_known_by_peer,
-							&far_players, 5);
-				else
-					sendRemoveNode(event->p, event->already_known_by_peer,
-							&far_players, 30);
+        float max_d = disable_single_change_sending ? 5 : 30;
+				sendRemoveNode(event->p, event->already_known_by_peer, max_d);
 			}
 			else if(event->type == MEET_BLOCK_NODE_METADATA_CHANGED)
 			{
 				infostream<<"Server: MEET_BLOCK_NODE_METADATA_CHANGED"<<std::endl;
 				prof.add("MEET_BLOCK_NODE_METADATA_CHANGED", 1);
-				setBlockNotSent(event->p);
 			}
 			else if(event->type == MEET_OTHER)
 			{
 				infostream<<"Server: MEET_OTHER"<<std::endl;
 				prof.add("MEET_OTHER", 1);
-				for(core::map<v3s16, bool>::Iterator
-						i = event->modified_blocks.getIterator();
-						i.atEnd()==false; i++)
-				{
-					v3s16 p = i.getNode()->getKey();
-					setBlockNotSent(p);
-				}
 			}
 			else
 			{
@@ -1816,34 +1271,6 @@ void Server::AsyncRunStep()
 						<<((u32)event->type)<<std::endl;
 			}
 			
-			/*
-				Set blocks not sent to far players
-			*/
-			if(far_players.size() > 0)
-			{
-				// Convert list format to that wanted by SetBlocksNotSent
-				core::map<v3s16, MapBlock*> modified_blocks2;
-				for(core::map<v3s16, bool>::Iterator
-						i = event->modified_blocks.getIterator();
-						i.atEnd()==false; i++)
-				{
-					v3s16 p = i.getNode()->getKey();
-					modified_blocks2.insert(p,
-							m_env->getMap().getBlockNoCreateNoEx(p));
-				}
-				// Set blocks not sent
-				for(core::list<u16>::Iterator
-						i = far_players.begin();
-						i != far_players.end(); i++)
-				{
-					u16 peer_id = *i;
-					RemoteClient *client = getClient(peer_id);
-					if(client==NULL)
-						continue;
-					client->SetBlocksNotSent(modified_blocks2);
-				}
-			}
-
 			delete event;
 
 			/*// Don't send too many at a time
@@ -2354,22 +1781,50 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	}
 	
 	Player *player = m_env->getPlayer(peer_id);
+
 	if(player == NULL){
 		infostream<<"Server::ProcessData(): Cancelling: "
 				"No player for peer_id="<<peer_id
 				<<std::endl;
 		return;
 	}
+  if(command == TOSERVER_REQUEST_BLOCKS)
+  {
+		if(datasize < 2+2)
+			return;
 
-	PlayerSAO *playersao = player->getPlayerSAO();
-	if(playersao == NULL){
-		infostream<<"Server::ProcessData(): Cancelling: "
-				"No player object for peer_id="<<peer_id
-				<<std::endl;
-		return;
-	}
+		/*
+			[0] u16 command
+			[2] u8 count
+			[3] v3s16 pos_0
+			[3+6] v3s16 pos_1
+			...
+		*/
 
-	if(command == TOSERVER_PLAYERPOS)
+		RemoteClient *client = getClient(peer_id);
+		u16 count = readU16(&data[2]);
+    verbosestream<<"Server::ProcessData(): Client peer_id="<<peer_id
+      <<" requested "<<count<<" blocks"<<std::endl;
+		for(u16 i=0; i<count; ++i)
+		{
+			if((s16)datasize < 2+1+(i+1)*6)
+				throw con::InvalidIncomingDataException
+					("REQUEST_BLOCKS length is too short");
+			v3s16 p = readV3S16(&data[2+2+i*6]);
+
+      MapBlock *block = NULL;
+      try
+      {
+        block = m_env->getMap().getBlockNoCreate(p);
+      }
+      catch(InvalidPositionException &e)
+      {
+        continue;
+      }
+      SendBlockNoLock(peer_id, block, client->serialization_version);
+		}
+  }
+  else if(command == TOSERVER_PLAYERPOS)
 	{
 		if(datasize < 2+12+12+4+4)
 			return;
@@ -2392,58 +1847,6 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		/*infostream<<"Server::ProcessData(): Moved player "<<peer_id<<" to "
 				<<"("<<position.X<<","<<position.Y<<","<<position.Z<<")"
 				<<" pitch="<<pitch<<" yaw="<<yaw<<std::endl;*/
-	}
-	else if(command == TOSERVER_GOTBLOCKS)
-	{
-		if(datasize < 2+1)
-			return;
-		
-		/*
-			[0] u16 command
-			[2] u8 count
-			[3] v3s16 pos_0
-			[3+6] v3s16 pos_1
-			...
-		*/
-
-		u16 count = data[2];
-		for(u16 i=0; i<count; i++)
-		{
-			if((s16)datasize < 2+1+(i+1)*6)
-				throw con::InvalidIncomingDataException
-					("GOTBLOCKS length is too short");
-			v3s16 p = readV3S16(&data[2+1+i*6]);
-			/*infostream<<"Server: GOTBLOCKS ("
-					<<p.X<<","<<p.Y<<","<<p.Z<<")"<<std::endl;*/
-			RemoteClient *client = getClient(peer_id);
-			client->GotBlock(p);
-		}
-	}
-	else if(command == TOSERVER_DELETEDBLOCKS)
-	{
-		if(datasize < 2+1)
-			return;
-		
-		/*
-			[0] u16 command
-			[2] u8 count
-			[3] v3s16 pos_0
-			[3+6] v3s16 pos_1
-			...
-		*/
-
-		u16 count = data[2];
-		for(u16 i=0; i<count; i++)
-		{
-			if((s16)datasize < 2+1+(i+1)*6)
-				throw con::InvalidIncomingDataException
-					("DELETEDBLOCKS length is too short");
-			v3s16 p = readV3S16(&data[2+1+i*6]);
-			/*infostream<<"Server: DELETEDBLOCKS ("
-					<<p.X<<","<<p.Y<<","<<p.Z<<")"<<std::endl;*/
-			RemoteClient *client = getClient(peer_id);
-			client->SetBlockNotSent(p);
-		}
 	}
 	else if(command == TOSERVER_CLICK_OBJECT)
 	{
@@ -2920,8 +2323,19 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 						<<". ignoring."<<std::endl;
 				// Re-send block to revert change on client-side
 				RemoteClient *client = getClient(peer_id);
+        JMutexAutoLock envlock(m_env_mutex);
+        JMutexAutoLock conlock(m_con_mutex);
 				v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_under, BS));
-				client->SetBlockNotSent(blockpos);
+        MapBlock *block = NULL;
+        try
+        {
+          block = m_env->getMap().getBlockNoCreate(blockpos);
+        }
+        catch(InvalidPositionException &e)
+        {
+          return;
+        }
+        SendBlockNoLock(client->peer_id, block, client->serialization_version);
 				// Do nothing else
 				return;
 			}
@@ -3336,8 +2750,6 @@ void Server::setInventoryModified(const InventoryLocation &loc)
 		MapBlock *block = m_env->getMap().getBlockNoCreateNoEx(blockpos);
 		if(block)
 			block->raiseModified(MOD_STATE_WRITE_NEEDED);
-		
-		setBlockNotSent(blockpos);
 	}
 	break;
 	case InventoryLocation::DETACHED:
@@ -3783,8 +3195,7 @@ void Server::stopSound(s32 handle)
 	m_playing_sounds.erase(i);
 }
 
-void Server::sendRemoveNode(v3s16 p, u16 ignore_id,
-	core::list<u16> *far_players, float far_d_nodes)
+void Server::sendRemoveNode(v3s16 p, u16 ignore_id, float far_d_nodes)
 {
 	float maxd = far_d_nodes*BS;
 	v3f p_f = intToFloat(p, BS);
@@ -3811,29 +3222,23 @@ void Server::sendRemoveNode(v3s16 p, u16 ignore_id,
 		if(client->peer_id == ignore_id)
 			continue;
 		
-		if(far_players)
-		{
-			// Get player
+    // Don't send if player is far away from event
 			Player *player = m_env->getPlayer(client->peer_id);
 			if(player)
 			{
-				// If player is far away, only set modified blocks not sent
 				v3f player_pos = player->getPosition();
 				if(player_pos.getDistanceFrom(p_f) > maxd)
 				{
-					far_players->push_back(client->peer_id);
 					continue;
 				}
 			}
-		}
 
 		// Send as reliable
 		m_con.Send(client->peer_id, 0, reply, true);
 	}
 }
 
-void Server::sendAddNode(v3s16 p, MapNode n, u16 ignore_id,
-		core::list<u16> *far_players, float far_d_nodes)
+void Server::sendAddNode(v3s16 p, MapNode n, u16 ignore_id, float far_d_nodes)
 {
 	float maxd = far_d_nodes*BS;
 	v3f p_f = intToFloat(p, BS);
@@ -3852,21 +3257,16 @@ void Server::sendAddNode(v3s16 p, MapNode n, u16 ignore_id,
 		if(client->peer_id == ignore_id)
 			continue;
 
-		if(far_players)
-		{
-			// Get player
+    // Don't send if player is far away from event
 			Player *player = m_env->getPlayer(client->peer_id);
 			if(player)
 			{
-				// If player is far away, only set modified blocks not sent
 				v3f player_pos = player->getPosition();
 				if(player_pos.getDistanceFrom(p_f) > maxd)
 				{
-					far_players->push_back(client->peer_id);
 					continue;
 				}
 			}
-		}
 
 		// Create packet
 		u32 replysize = 8 + MapNode::serializedLength(client->serialization_version);
@@ -3879,17 +3279,6 @@ void Server::sendAddNode(v3s16 p, MapNode n, u16 ignore_id,
 
 		// Send as reliable
 		m_con.Send(client->peer_id, 0, reply, true);
-	}
-}
-
-void Server::setBlockNotSent(v3s16 p)
-{
-	for(core::map<u16, RemoteClient*>::Iterator
-		i = m_clients.getIterator();
-		i.atEnd()==false; i++)
-	{
-		RemoteClient *client = i.getNode()->getValue();
-		client->SetBlockNotSent(p);
 	}
 }
 
@@ -3944,77 +3333,6 @@ void Server::SendBlockNoLock(u16 peer_id, MapBlock *block, u8 ver)
 		Send packet
 	*/
 	m_con.Send(peer_id, 1, reply, true);
-}
-
-void Server::SendBlocks(float dtime)
-{
-	DSTACK(__FUNCTION_NAME);
-
-	JMutexAutoLock envlock(m_env_mutex);
-	JMutexAutoLock conlock(m_con_mutex);
-
-	ScopeProfiler sp(g_profiler, "Server: sel and send blocks to clients");
-
-	core::array<PrioritySortedBlockTransfer> queue;
-
-	s32 total_sending = 0;
-	
-	{
-		ScopeProfiler sp(g_profiler, "Server: selecting blocks for sending");
-
-		for(core::map<u16, RemoteClient*>::Iterator
-			i = m_clients.getIterator();
-			i.atEnd() == false; i++)
-		{
-			RemoteClient *client = i.getNode()->getValue();
-			assert(client->peer_id == i.getNode()->getKey());
-
-			// If definitions and textures have not been sent, don't
-			// send MapBlocks either
-			if(!client->definitions_sent)
-				continue;
-
-			total_sending += client->SendingCount();
-			
-			if(client->serialization_version == SER_FMT_VER_INVALID)
-				continue;
-			
-			client->GetNextBlocks(this, dtime, queue);
-		}
-	}
-
-	// Sort.
-	// Lowest priority number comes first.
-	// Lowest is most important.
-	queue.sort();
-
-	for(u32 i=0; i<queue.size(); i++)
-	{
-		//TODO: Calculate limit dynamically
-		if(total_sending >= g_settings->getS32
-				("max_simultaneous_block_sends_server_total"))
-			break;
-		
-		PrioritySortedBlockTransfer q = queue[i];
-
-		MapBlock *block = NULL;
-		try
-		{
-			block = m_env->getMap().getBlockNoCreate(q.pos);
-		}
-		catch(InvalidPositionException &e)
-		{
-			continue;
-		}
-
-		RemoteClient *client = getClient(q.peer_id);
-
-		SendBlockNoLock(q.peer_id, block, client->serialization_version);
-
-		client->SentBlock(q.pos);
-
-		total_sending++;
-	}
 }
 
 void Server::fillMediaCache()

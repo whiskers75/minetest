@@ -331,8 +331,7 @@ public:
 	bool definitions_sent;
 
 	RemoteClient():
-		m_time_from_building(9999),
-		m_excess_gotblocks(0)
+		m_time_from_building(9999)
 	{
 		peer_id = 0;
 		serialization_version = SER_FMT_VER_INVALID;
@@ -348,26 +347,6 @@ public:
 	{
 	}
 	
-	/*
-		Finds block that should be sent next to the client.
-		Environment should be locked when this is called.
-		dtime is used for resetting send radius at slow interval
-	*/
-	void GetNextBlocks(Server *server, float dtime,
-			core::array<PrioritySortedBlockTransfer> &dest);
-
-	void GotBlock(v3s16 p);
-
-	void SentBlock(v3s16 p);
-
-	void SetBlockNotSent(v3s16 p);
-	void SetBlocksNotSent(core::map<v3s16, MapBlock*> &blocks);
-
-	s32 SendingCount()
-	{
-		return m_blocks_sending.size();
-	}
-	
 	// Increments timeouts and removes timed-out blocks from list
 	// NOTE: This doesn't fix the server-not-sending-block bug
 	//       because it is related to emerging, not sending.
@@ -376,12 +355,8 @@ public:
 	void PrintInfo(std::ostream &o)
 	{
 		o<<"RemoteClient "<<peer_id<<": "
-				<<"m_blocks_sent.size()="<<m_blocks_sent.size()
-				<<", m_blocks_sending.size()="<<m_blocks_sending.size()
 				<<", m_nearest_unsent_d="<<m_nearest_unsent_d
-				<<", m_excess_gotblocks="<<m_excess_gotblocks
 				<<std::endl;
-		m_excess_gotblocks = 0;
 	}
 
 	// Time from last placing or removing blocks
@@ -413,25 +388,6 @@ private:
 	s16 m_nearest_unsent_d;
 	v3s16 m_last_center;
 	float m_nearest_unsent_reset_timer;
-	
-	/*
-		Blocks that are currently on the line.
-		This is used for throttling the sending of blocks.
-		- The size of this list is limited to some value
-		Block is added when it is sent with BLOCKDATA.
-		Block is removed when GOTBLOCKS is received.
-		Value is time from sending. (not used at the moment)
-	*/
-	core::map<v3s16, float> m_blocks_sending;
-
-	/*
-		Count of excess GotBlocks().
-		There is an excess amount because the client sometimes
-		gets a block so late that the server sends it again,
-		and the client then sends two GOTBLOCKs.
-		This is resetted by PrintInfo()
-	*/
-	u32 m_excess_gotblocks;
 	
 	// CPU usage optimization
 	u32 m_nothing_to_send_counter;
@@ -625,17 +581,11 @@ private:
 		far_d_nodes are ignored and their peer_ids are added to far_players
 	*/
 	// Envlock and conlock should be locked when calling these
-	void sendRemoveNode(v3s16 p, u16 ignore_id=0,
-			core::list<u16> *far_players=NULL, float far_d_nodes=100);
-	void sendAddNode(v3s16 p, MapNode n, u16 ignore_id=0,
-			core::list<u16> *far_players=NULL, float far_d_nodes=100);
-	void setBlockNotSent(v3s16 p);
+	void sendRemoveNode(v3s16 p, u16 ignore_id=0, float far_d_nodes=100);
+	void sendAddNode(v3s16 p, MapNode n, u16 ignore_id=0, float far_d_nodes=100);
 	
 	// Environment and Connection must be locked when called
 	void SendBlockNoLock(u16 peer_id, MapBlock *block, u8 ver);
-	
-	// Sends blocks to clients (locks env and con on its own)
-	void SendBlocks(float dtime);
 	
 	void fillMediaCache();
 	void sendMediaAnnouncement(u16 peer_id);

@@ -58,7 +58,6 @@ struct QueuedMeshUpdate
 {
 	v3s16 p;
 	MeshMakeData *data;
-	bool ack_block_to_server;
 
 	QueuedMeshUpdate();
 	~QueuedMeshUpdate();
@@ -77,8 +76,7 @@ public:
 	/*
 		peer_id=0 adds with nobody to send to
 	*/
-	void addBlock(v3s16 p, MeshMakeData *data,
-			bool ack_block_to_server, bool urgent);
+	void addBlock(v3s16 p, MeshMakeData *data, bool urgent);
 
 	// Returned pointer must be deleted
 	// Returns NULL if queue is empty
@@ -100,12 +98,10 @@ struct MeshUpdateResult
 {
 	v3s16 p;
 	MapBlockMesh *mesh;
-	bool ack_block_to_server;
 
 	MeshUpdateResult():
 		p(-1338,-1338,-1338),
-		mesh(NULL),
-		ack_block_to_server(false)
+		mesh(NULL)
 	{
 	}
 };
@@ -272,10 +268,10 @@ public:
 
 	u64 getMapSeed(){ return m_map_seed; }
 
-	void addUpdateMeshTask(v3s16 blockpos, bool ack_to_server=false, bool urgent=false);
+	void addUpdateMeshTask(v3s16 blockpos, bool urgent=false);
 	// Including blocks at appropriate edges
-	void addUpdateMeshTaskWithEdge(v3s16 blockpos, bool ack_to_server=false, bool urgent=false);
-	void addUpdateMeshTaskForNode(v3s16 nodepos, bool ack_to_server=false, bool urgent=false);
+	void addUpdateMeshTaskWithEdge(v3s16 blockpos, bool urgent=false);
+	void addUpdateMeshTaskForNode(v3s16 nodepos, bool urgent=false);
 
 	// Get event from queue. CE_NONE is returned if queue is empty.
 	ClientEvent getClientEvent();
@@ -334,7 +330,10 @@ private:
 	float m_avg_rtt_timer;
 	float m_playerpos_send_timer;
 	float m_ignore_damage_timer; // Used after server moves player
+  float m_request_blocks_timer;
 	IntervalLimiter m_map_timer_and_unload_interval;
+
+  void sendRequestForNearbyBlocks();
 
 	IWritableTextureSource *m_tsrc;
 	IWritableItemDefManager *m_itemdef;
