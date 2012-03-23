@@ -607,10 +607,10 @@ void Client::step(float dtime)
   {
     float &counter = m_request_blocks_timer;
     counter += dtime;
-    if (counter >= 3)
+    if (counter >= 1)
     {
       counter = 0.0;
-      sendRequestForNearbyBlocks();
+      sendRequestForBlocks();
     }
   }
 
@@ -1947,18 +1947,19 @@ void Client::sendPlayerItem(u16 item)
 	Send(0, data, true);
 }
 
-void Client::sendRequestForNearbyBlocks()
+void Client::sendRequestForBlocks()
 {
-  // FIXME Temporary hack
-  u16 near_dist = 2;
+  std::ostringstream os(std::ios_base::binary);
+  u8 buf[12];
+
+  u16 near_dist = 1;
   u16 request_width = near_dist*2 + 1;
   u16 request_blocks = request_width*request_width*request_width;
   verbosestream<<"Client: Requesting "<<(int)(request_blocks)<<" nearby blocks"<<std::endl;
 
-  std::ostringstream os(std::ios_base::binary);
-  u8 buf[12];
+  Player* player = m_env.getLocalPlayer();
+  v3s16 blockpos = getNodeBlockPos(floatToInt(player->getPosition(), BS));
 
-  // Write command
   writeU16(buf, TOSERVER_REQUEST_BLOCKS);
   os.write((char*)buf, 2);
 
@@ -1968,7 +1969,7 @@ void Client::sendRequestForNearbyBlocks()
   for(int x = -near_dist; x <= near_dist; ++x) {
     for(int y = -near_dist; y <= near_dist; ++y) {
       for(int z = -near_dist; z <= near_dist; ++z) {
-        v3s16 p(x, y, z);
+        v3s16 p = blockpos + v3s16(x, y, z);
         writeV3S16(buf, p);
         os.write((char*)buf, 6);
       }

@@ -1787,10 +1787,9 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 			v3s16 p = readV3S16(&data[2+2+i*6]);
 
       MapBlock *block = m_env->getMap().getBlockNoCreateNoEx(p);
-      if (block != NULL &&
-      block->isValid() &&
-      block->isGenerated() &&
-      !(block->isDummy())) {
+      if (block != NULL && !(block->isDummy()) && block->isValid() &&
+      block->isGenerated()
+      ) {
         block->resetUsageTimer();
       SendBlockNoLock(peer_id, block, client->serialization_version);
       } else {

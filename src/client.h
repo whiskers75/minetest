@@ -333,7 +333,7 @@ private:
   float m_request_blocks_timer;
 	IntervalLimiter m_map_timer_and_unload_interval;
 
-  void sendRequestForNearbyBlocks();
+  void sendRequestForBlocks();
 
 	IWritableTextureSource *m_tsrc;
 	IWritableItemDefManager *m_itemdef;
