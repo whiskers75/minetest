@@ -77,8 +77,6 @@ v3f findSpawnPos(ServerMap &map);
 struct QueuedBlockEmerge
 {
 	v3s16 pos;
-	// key = peer_id, value = flags
-	core::map<u16, u8> peer_ids;
 };
 
 /*
@@ -104,40 +102,25 @@ public:
 		}
 	}
 	
-	/*
-		peer_id=0 adds with nobody to send to
-	*/
-	void addBlock(u16 peer_id, v3s16 pos, u8 flags)
+	void addBlock(v3s16 pos)
 	{
 		DSTACK(__FUNCTION_NAME);
 	
 		JMutexAutoLock lock(m_mutex);
 
-		if(peer_id != 0)
-		{
 			/*
-				Find if block is already in queue.
-				If it is, update the peer to it and quit.
+			Add the block if it's not already queued
 			*/
 			core::list<QueuedBlockEmerge*>::Iterator i;
 			for(i=m_queue.begin(); i!=m_queue.end(); i++)
 			{
 				QueuedBlockEmerge *q = *i;
 				if(q->pos == pos)
-				{
-					q->peer_ids[peer_id] = flags;
 					return;
 				}
-			}
-		}
 		
-		/*
-			Add the block
-		*/
 		QueuedBlockEmerge *q = new QueuedBlockEmerge;
 		q->pos = pos;
-		if(peer_id != 0)
-			q->peer_ids[peer_id] = flags;
 		m_queue.push_back(q);
 	}
 
@@ -161,23 +144,6 @@ public:
 		return m_queue.size();
 	}
 	
-	u32 peerItemCount(u16 peer_id)
-	{
-		JMutexAutoLock lock(m_mutex);
-
-		u32 count = 0;
-
-		core::list<QueuedBlockEmerge*>::Iterator i;
-		for(i=m_queue.begin(); i!=m_queue.end(); i++)
-		{
-			QueuedBlockEmerge *q = *i;
-			if(q->peer_ids.find(peer_id) != NULL)
-				count++;
-		}
-
-		return count;
-	}
-
 private:
 	core::list<QueuedBlockEmerge*> m_queue;
 	JMutex m_mutex;
@@ -395,8 +361,7 @@ private:
 };
 
 class Server : public con::PeerHandler, public MapEventReceiver,
-		public InventoryManager, public IGameDef,
-		public IBackgroundBlockEmerger
+		public InventoryManager, public IGameDef
 {
 public:
 	/*
@@ -495,8 +460,6 @@ public:
 	void notifyPlayer(const char *name, const std::wstring msg);
 	void notifyPlayers(const std::wstring msg);
 
-	void queueBlockEmerge(v3s16 blockpos, bool allow_generate);
-	
 	// Creates or resets inventory
 	Inventory* createDetachedInventory(const std::string &name);
 	

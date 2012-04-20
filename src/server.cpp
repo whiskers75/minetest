@@ -205,33 +205,9 @@ void * EmergeThread::Thread()
 			will be allowed.
 		*/
 		
-		/*
-			Check if any peer wants it as non-optional. In that case it
-			will be generated.
-
-			Also decrement the emerge queue count in clients.
-		*/
-
-		bool only_from_disk = true;
-
-		{
-			core::map<u16, u8>::Iterator i;
-			for(i=q->peer_ids.getIterator(); i.atEnd()==false; i++)
-			{
-				//u16 peer_id = i.getNode()->getKey();
-
-				// Check flags
-				u8 flags = i.getNode()->getValue();
-				if((flags & BLOCK_EMERGE_FLAG_FROMDISK) == false)
-					only_from_disk = false;
-				
-			}
-		}
-		
 		if(enable_mapgen_debug_info)
 			infostream<<"EmergeThread: p="
-					<<"("<<p.X<<","<<p.Y<<","<<p.Z<<") "
-					<<"only_from_disk="<<only_from_disk<<std::endl;
+					<<"("<<p.X<<","<<p.Y<<","<<p.Z<<") "<<std::endl;
 		
 		ServerMap &map = ((ServerMap&)m_server->m_env->getMap());
 
@@ -266,8 +242,7 @@ void * EmergeThread::Thread()
 			
 			// If could not load and allowed to generate, start generation
 			// inside this same envlock
-			if(only_from_disk == false &&
-					(block == NULL || block->isGenerated() == false)){
+			if(block == NULL || block->isGenerated() == false){
 				if(enable_mapgen_debug_info)
 					infostream<<"EmergeThread: generating"<<std::endl;
 				started_generate = true;
@@ -554,8 +529,7 @@ Server::Server(
 
 	// Initialize Environment
 	
-	m_env = new ServerEnvironment(new ServerMap(path_world, this), m_lua,
-			this, this);
+	m_env = new ServerEnvironment(new ServerMap(path_world, this), m_lua, this);
 	
 	// Give environment reference to scripting api
 	scriptapi_add_environment(m_lua, m_env);
@@ -1790,9 +1764,6 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	}
   if(command == TOSERVER_REQUEST_BLOCKS)
   {
-		if(datasize < 2+2)
-			return;
-
 		/*
 			[0] u16 command
 			[2] u8 count
@@ -1800,6 +1771,9 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 			[3+6] v3s16 pos_1
 			...
 		*/
+
+    if(datasize < 2+2)
+			return;
 
 		RemoteClient *client = getClient(peer_id);
 		u16 count = readU16(&data[2]);
@@ -1812,16 +1786,17 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 					("REQUEST_BLOCKS length is too short");
 			v3s16 p = readV3S16(&data[2+2+i*6]);
 
-      MapBlock *block = NULL;
-      try
-      {
-        block = m_env->getMap().getBlockNoCreate(p);
-      }
-      catch(InvalidPositionException &e)
-      {
-        continue;
-      }
+      MapBlock *block = m_env->getMap().getBlockNoCreateNoEx(p);
+      if (block != NULL &&
+      block->isValid() &&
+      block->isGenerated() &&
+      !(block->isDummy())) {
+        block->resetUsageTimer();
       SendBlockNoLock(peer_id, block, client->serialization_version);
+      } else {
+				m_emerge_queue.addBlock(p);
+        m_emergethread.trigger();
+      }
 		}
   }
   else if(command == TOSERVER_PLAYERPOS)
@@ -2321,21 +2296,6 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 						<<" from too far: "
 						<<"d="<<d<<", max_d="<<max_d
 						<<". ignoring."<<std::endl;
-				// Re-send block to revert change on client-side
-				RemoteClient *client = getClient(peer_id);
-        JMutexAutoLock envlock(m_env_mutex);
-        JMutexAutoLock conlock(m_con_mutex);
-				v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_under, BS));
-        MapBlock *block = NULL;
-        try
-        {
-          block = m_env->getMap().getBlockNoCreate(blockpos);
-        }
-        catch(InvalidPositionException &e)
-        {
-          return;
-        }
-        SendBlockNoLock(client->peer_id, block, client->serialization_version);
 				// Do nothing else
 				return;
 			}
@@ -2389,10 +2349,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 				catch(InvalidPositionException &e)
 				{
 					infostream<<"Server: Not punching: Node not found."
-							<<" Adding block to emerge queue."
 							<<std::endl;
-					m_emerge_queue.addBlock(peer_id,
-							getNodeBlockPos(p_above), BLOCK_EMERGE_FLAG_FROMDISK);
 				}
 				if(n.getContent() != CONTENT_IGNORE)
 					scriptapi_node_on_punch(m_lua, p_under, n, playersao);
@@ -2446,10 +2403,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 				catch(InvalidPositionException &e)
 				{
 					infostream<<"Server: Not finishing digging: Node not found."
-							<<" Adding block to emerge queue."
 							<<std::endl;
-					m_emerge_queue.addBlock(peer_id,
-							getNodeBlockPos(p_above), BLOCK_EMERGE_FLAG_FROMDISK);
 				}
 
 				/* Cheat prevention */
@@ -3842,14 +3796,6 @@ void Server::notifyPlayer(const char *name, const std::wstring msg)
 void Server::notifyPlayers(const std::wstring msg)
 {
 	BroadcastChatMessage(msg);
-}
-
-void Server::queueBlockEmerge(v3s16 blockpos, bool allow_generate)
-{
-	u8 flags = 0;
-	if(!allow_generate)
-		flags |= BLOCK_EMERGE_FLAG_FROMDISK;
-	m_emerge_queue.addBlock(PEER_ID_INEXISTENT, blockpos, flags);
 }
 
 Inventory* Server::createDetachedInventory(const std::string &name)

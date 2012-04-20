@@ -319,11 +319,10 @@ void ActiveBlockList::update(core::list<v3s16> &active_positions,
 */
 
 ServerEnvironment::ServerEnvironment(ServerMap *map, lua_State *L,
-		IGameDef *gamedef, IBackgroundBlockEmerger *emerger):
+		IGameDef *gamedef):
 	m_map(map),
 	m_lua(L),
 	m_gamedef(gamedef),
-	m_emerger(emerger),
 	m_random_spawn_timer(3),
 	m_send_recommended_timer(0),
 	m_active_block_interval_overload_skip(0),
@@ -1036,7 +1035,6 @@ void ServerEnvironment::step(float dtime)
 			MapBlock *block = m_map->getBlockNoCreateNoEx(p);
 			if(block==NULL){
 				// Block needs to be fetched first
-				m_emerger->queueBlockEmerge(p, false);
 				m_active_blocks.m_list.remove(p);
 				continue;
 			}
