@@ -1950,36 +1950,35 @@ void Client::sendPlayerItem(u16 item)
 void Client::sendRequestForBlocks()
 {
   std::ostringstream os(std::ios_base::binary);
-  u8 buf[12];
-
-  u16 near_dist = 1;
-  u16 request_width = near_dist*2 + 1;
-  u16 request_blocks = request_width*request_width*request_width;
-  verbosestream<<"Client: Requesting "<<(int)(request_blocks)<<" nearby blocks"<<std::endl;
+  u8 buf[6];
 
   Player* player = m_env.getLocalPlayer();
   v3s16 blockpos = getNodeBlockPos(floatToInt(player->getPosition(), BS));
 
   writeU16(buf, TOSERVER_REQUEST_BLOCKS);
   os.write((char*)buf, 2);
+  
+  v3s16 pos_0 = blockpos - v3s16(1,1,1);
+  writeV3S16(buf, pos_0);
+  os.write((char*)buf, 6);
+  
+  v3s16 pos_1 = blockpos + v3s16(1,1,1);
+  writeV3S16(buf, pos_1);
+  os.write((char*)buf, 6);
 
-  writeU16(buf, request_blocks);
-  os.write((char*)buf, 2);
-
-  for(int x = -near_dist; x <= near_dist; ++x) {
-    for(int y = -near_dist; y <= near_dist; ++y) {
-      for(int z = -near_dist; z <= near_dist; ++z) {
-        v3s16 p = blockpos + v3s16(x, y, z);
-        writeV3S16(buf, p);
-        os.write((char*)buf, 6);
+  for(int x = pos_0.X; x <= pos_1.X; ++x) {
+    for(int y = pos_0.Y; y <= pos_1.Y; ++y) {
+      for(int z = pos_0.Z; z <= pos_1.Z; ++z) {
+        u32 cur_changenum = 0; // TODO
+        writeU32(buf, cur_changenum);
+        os.write((char*)buf, 4);
       }
     }
   }
 
 	std::string s = os.str();
 	SharedBuffer<u8> data((u8*)s.c_str(), s.size());
-	// Send as unreliable
-	Send(0, data, false);
+	Send(0, data, false); // Send as unreliable
 }
 
 void Client::removeNode(v3s16 p)

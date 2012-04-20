@@ -355,10 +355,11 @@ enum ToServerCommand
 
 	TOSERVER_REQUEST_BLOCKS=0x20,
   /*
-		u16 command
-		u8 number of blocks requested
+		[0] u16 command
+		[2] v3s16 pos_0
+		[2+6] v3s16 pos_1
 		for each block {
-      v3s16 blockpos
+      u32 client_changenum
 		}
   */
 

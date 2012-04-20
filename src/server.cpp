@@ -1765,38 +1765,45 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
   if(command == TOSERVER_REQUEST_BLOCKS)
   {
 		/*
-			[0] u16 command
-			[2] u8 count
-			[3] v3s16 pos_0
-			[3+6] v3s16 pos_1
-			...
+      [0] u16 command
+      [2] v3s16 pos_0
+      [2+6] v3s16 pos_1
+      for each block {
+        u32 client_version
+      }
 		*/
 
-    if(datasize < 2+2)
+    if(datasize < 2+6+6)
 			return;
+		
+    v3s16 pos_0 = readV3S16(&data[2]);
+    v3s16 pos_1 = readV3S16(&data[2+6]);
 
 		RemoteClient *client = getClient(peer_id);
-		u16 count = readU16(&data[2]);
-    verbosestream<<"Server::ProcessData(): Client peer_id="<<peer_id
-      <<" requested "<<count<<" blocks"<<std::endl;
-		for(u16 i=0; i<count; ++i)
-		{
-			if((s16)datasize < 2+1+(i+1)*6)
-				throw con::InvalidIncomingDataException
-					("REQUEST_BLOCKS length is too short");
-			v3s16 p = readV3S16(&data[2+2+i*6]);
-
-      MapBlock *block = m_env->getMap().getBlockNoCreateNoEx(p);
-      if (block != NULL && !(block->isDummy()) && block->isValid() &&
-      block->isGenerated()
-      ) {
-        block->resetUsageTimer();
-      SendBlockNoLock(peer_id, block, client->serialization_version);
-      } else {
-				m_emerge_queue.addBlock(p);
-        m_emergethread.trigger();
+    u16 offset = 0;
+    v3s16 p;
+    for(p.X = pos_0.X; p.X <= pos_1.X; ++p.X) {
+      for(p.Y = pos_0.Y; p.Y <= pos_1.Y; ++p.Y) {
+        for(p.Z = pos_0.Z; p.Z <= pos_1.Z; ++p.Z) {
+          if((s16)datasize < 2+6+6+offset+4)
+            throw con::InvalidIncomingDataException
+              ("REQUEST_BLOCKS data length is too short");
+          u32 client_changenum = readU32(&data[2+6+6+offset]); // TODO Use this
+          offset += 4;
+          
+          MapBlock *block = m_env->getMap().getBlockNoCreateNoEx(p);
+          if (block != NULL && !(block->isDummy()) && block->isValid() &&
+          block->isGenerated()
+          ) {
+            block->resetUsageTimer();
+          SendBlockNoLock(peer_id, block, client->serialization_version);
+          } else {
+            m_emerge_queue.addBlock(p);
+            m_emergethread.trigger();
+          }
+        }
       }
-		}
+    }
   }
   else if(command == TOSERVER_PLAYERPOS)
 	{
