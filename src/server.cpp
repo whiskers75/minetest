@@ -1788,7 +1788,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
           if((s16)datasize < 2+6+6+offset+4)
             throw con::InvalidIncomingDataException
               ("REQUEST_BLOCKS data length is too short");
-          u32 client_changenum = readU32(&data[2+6+6+offset]); // TODO Use this
+          u32 client_change_counter = readU32(&data[2+6+6+offset]);
           offset += 4;
           
           MapBlock *block = m_env->getMap().getBlockNoCreateNoEx(p);
@@ -1796,7 +1796,9 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
           block->isGenerated()
           ) {
             block->resetUsageTimer();
-          SendBlockNoLock(peer_id, block, client->serialization_version);
+            if (client_change_counter == BLOCK_CHANGECOUNTER_UNDEFINED || block->getChangeCounter() > client_change_counter) {
+              SendBlockNoLock(peer_id, block, client->serialization_version);
+            }
           } else {
             m_emerge_queue.addBlock(p);
             m_emergethread.trigger();
@@ -3285,6 +3287,8 @@ void Server::SendBlockNoLock(u16 peer_id, MapBlock *block, u8 ver)
 	writeS16(&reply[4], p.Y);
 	writeS16(&reply[6], p.Z);
 	memcpy(&reply[8], *blockdata, blockdata.getSize());
+
+  g_profiler->add("Server: blocks sent", 1);
 
 	/*infostream<<"Server: Sending block ("<<p.X<<","<<p.Y<<","<<p.Z<<")"
 			<<":  \tpacket size: "<<replysize<<std::endl;*/

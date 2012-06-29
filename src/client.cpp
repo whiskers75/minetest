@@ -1027,7 +1027,7 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 		
 		std::string datastring((char*)&data[8], datasize-8);
 		std::istringstream istr(datastring, std::ios_base::binary);
-		
+
 		MapSector *sector;
 		MapBlock *block;
 		
@@ -1045,6 +1045,7 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 			/*
 				Update an existing block
 			*/
+
 			//infostream<<"Updating"<<std::endl;
 			block->deSerialize(istr, ser_version, false);
 		}
@@ -1969,8 +1970,13 @@ void Client::sendRequestForBlocks()
   for(int x = pos_0.X; x <= pos_1.X; ++x) {
     for(int y = pos_0.Y; y <= pos_1.Y; ++y) {
       for(int z = pos_0.Z; z <= pos_1.Z; ++z) {
-        u32 cur_changenum = 0; // TODO
-        writeU32(buf, cur_changenum);
+        v3s16 p = v3s16(x,y,z);
+        u32 local_change_counter = BLOCK_CHANGECOUNTER_UNDEFINED;
+        MapBlock *b = m_env.getMap().getBlockNoCreateNoEx(p);
+        if (b != NULL) {
+          local_change_counter = b->getChangeCounter();
+        }
+        writeU32(buf, local_change_counter);
         os.write((char*)buf, 4);
       }
     }

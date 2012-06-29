@@ -37,13 +37,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "nodetimer.h"
 #include "modifiedstate.h"
 #include "util/numeric.h" // getContainerPos
+#include "map.h"
 
-class Map;
 class NodeMetadataList;
 class IGameDef;
 class MapBlockMesh;
 
 #define BLOCK_TIMESTAMP_UNDEFINED 0xffffffff
+#define BLOCK_CHANGECOUNTER_UNDEFINED 0xffffffff
 
 /*// Named by looking towards z+
 enum{
@@ -152,24 +153,28 @@ public:
 	// m_modified methods
 	void raiseModified(u32 mod, const std::string &reason="unknown")
 	{
-		if(mod > m_modified){
-			m_modified = mod;
-			m_modified_reason = reason;
-			m_modified_reason_too_long = false;
+    if (m_parent->mapType() == MAPTYPE_SERVER) {
+      ++m_change_counter;
 
-			if(m_modified >= MOD_STATE_WRITE_AT_UNLOAD){
-				m_disk_timestamp = m_timestamp;
-			}
-		} else if(mod == m_modified){
-			if(!m_modified_reason_too_long){
-				if(m_modified_reason.size() < 40)
-					m_modified_reason += ", " + reason;
-				else{
-					m_modified_reason += "...";
-					m_modified_reason_too_long = true;
-				}
-			}
-		}
+      if(mod > m_modified){
+        m_modified = mod;
+        m_modified_reason = reason;
+        m_modified_reason_too_long = false;
+
+        if(m_modified >= MOD_STATE_WRITE_AT_UNLOAD){
+          m_disk_timestamp = m_timestamp;
+        }
+      } else if(mod == m_modified){
+        if(!m_modified_reason_too_long){
+          if(m_modified_reason.size() < 40)
+            m_modified_reason += ", " + reason;
+          else{
+            m_modified_reason += "...";
+            m_modified_reason_too_long = true;
+          }
+        }
+      }
+    }
 	}
 	u32 getModified()
 	{
@@ -414,6 +419,10 @@ public:
 	{
 		return m_disk_timestamp;
 	}
+
+  u32 getChangeCounter() {
+    return m_change_counter;
+  }
 	
 	/*
 		See m_usage_timer
@@ -560,6 +569,13 @@ private:
 	u32 m_timestamp;
 	// The on-disk (or to-be on-disk) timestamp value
 	u32 m_disk_timestamp;
+
+  /*
+    Incremented whenever the block changes. Used to
+    determine whether clients have the latest version of a block or
+    not.
+  */
+  u32 m_change_counter;
 
 	/*
 		When the block is accessed, this is set to 0.
