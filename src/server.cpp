@@ -1762,6 +1762,17 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 				<<std::endl;
 		return;
 	}
+
+	PlayerSAO *playersao = player->getPlayerSAO();
+	if(playersao == NULL){
+		infostream<<"Server::ProcessData(): Cancelling: "
+				"No player object for peer_id="<<peer_id
+				<<std::endl;
+		return;
+	}
+
+	ServerMap &map = (ServerMap&)(m_env->getMap());
+
   if(command == TOSERVER_REQUEST_BLOCKS)
   {
 		/*
@@ -1791,7 +1802,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
           u32 client_change_counter = readU32(&data[2+6+6+offset]);
           offset += 4;
           
-          MapBlock *block = m_env->getMap().getBlockNoCreateNoEx(p);
+          MapBlock *block = map.getBlockNoCreateNoEx(p);
           if (block != NULL && !(block->isDummy()) && block->isValid() &&
           block->isGenerated()
           ) {
@@ -2247,13 +2258,6 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		verbosestream<<"TOSERVER_INTERACT: action="<<(int)action<<", item="
 				<<item_i<<", pointed="<<pointed.dump()<<std::endl;
 
-		if(player->hp == 0)
-		{
-			verbosestream<<"TOSERVER_INTERACT: "<<player->getName()
-				<<" tried to interact, but is dead!"<<std::endl;
-			return;
-		}
-
 		v3f player_pos = playersao->getLastGoodPosition();
 
 		// Update wielded item
@@ -2291,11 +2295,23 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		}
 
 		/*
-			Check that target is reasonably close
-			(only when digging or placing things)
+			Make sure the player is allowed to do it
 		*/
+		bool interact_allowed = true;
+
+		if(player->hp == 0)
+		{
+			verbosestream<<"TOSERVER_INTERACT: "<<player->getName()
+				<<" tried to interact, but is dead!"<<std::endl;
+			interact_allowed = false;
+		}
+
 		if(action == 0 || action == 2 || action == 3)
 		{
+			/*
+				Check that the target is reasonably close when placing
+				or digging things.
+			*/
 			float d = player_pos.getDistanceFrom(pointed_pos_under);
 			float max_d = BS * 14; // Just some large enough value
 			if(d > max_d){
@@ -2304,31 +2320,43 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 						<<" from too far: "
 						<<"d="<<d<<", max_d="<<max_d
 						<<". ignoring."<<std::endl;
-				// Do nothing else
-				return;
+				interact_allowed = false;
 			}
 		}
 
-		/*
-			Make sure the player is allowed to do it
-		*/
 		if(!checkPriv(player->getName(), "interact"))
 		{
 			actionstream<<player->getName()<<" attempted to interact with "
 					<<pointed.dump()<<" without 'interact' privilege"
 					<<std::endl;
+			interact_allowed = false;
+		}
+
+		/*
+			If not allowed, resend the block to client on next request, to
+			revert any client-side changes done by this action.
+		*/
+		if(!interact_allowed)
+		{
 			// Re-send block to revert change on client-side
-			RemoteClient *client = getClient(peer_id);
+			// FIXME: This is not optimal at all because this re-sends them
+			//        to everyone instead of the current client only
 			// Digging completed -> under
+			v3s16 under_blockpos = getNodeBlockPos(p_under);
 			if(action == 2){
-				v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_under, BS));
-				client->SetBlockNotSent(blockpos);
+				MapBlock *block = map.getBlockNoCreateNoEx(under_blockpos);
+				if (block)
+					block->raiseModified(MOD_STATE_CLEAN,"interactDenied");
 			}
 			// Placement -> above
-			if(action == 3){
-				v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_above, BS));
-				client->SetBlockNotSent(blockpos);
+			v3s16 above_blockpos = getNodeBlockPos(p_above);
+			if(action == 3 && above_blockpos != under_blockpos){
+				MapBlock *block = map.getBlockNoCreateNoEx(above_blockpos);
+				if (block)
+					block->raiseModified(MOD_STATE_CLEAN,"interactDenied");
 			}
+
+			// Do nothing else
 			return;
 		}
 

@@ -420,6 +420,14 @@ public:
 		return m_disk_timestamp;
 	}
 
+  /*
+    Only use setChangeCounter on the client side, where it can mean
+    "this is the change number that this block is contemporary with".
+    On the server, the counter should only be updated by raiseModified.
+  */
+  void setChangeCounter(u32 cc) {
+    m_change_counter = cc;
+  }
   u32 getChangeCounter() {
     return m_change_counter;
   }
@@ -574,6 +582,10 @@ private:
     Incremented whenever the block changes. Used to
     determine whether clients have the latest version of a block or
     not.
+    - On the server, this is updated only when the block
+    changes.
+    - On the client, updated when the client receives updated
+    block information from the server.
   */
   u32 m_change_counter;
 
