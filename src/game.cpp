@@ -2036,7 +2036,7 @@ void the_game(
 		}
 
 		/*
-			Calculate what block is the crosshair pointing to
+			Calculate what object is the crosshair pointing to
 		*/
 		
 		//u32 t1 = device->getTimer()->getRealTime();
