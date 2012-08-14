@@ -47,7 +47,8 @@ ClientMap::ClientMap(
 	m_control(control),
 	m_camera_position(0,0,0),
 	m_camera_direction(0,0,1),
-	m_camera_fov(M_PI)
+	m_camera_fov(M_PI),
+  m_next_to_request_list_needs_culling(false)
 {
 	m_camera_mutex.Init();
 	assert(m_camera_mutex.IsInitialized());
@@ -178,6 +179,8 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 	if(pass == scene::ESNRP_SOLID)
 	{
 		m_last_drawn_sectors.clear();
+    m_last_blocks_needed.clear();
+    m_next_to_request_list_needs_culling = true;
 	}
 
 	/*
@@ -310,23 +313,11 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 			blocks_in_range++;
 			
 			/*
-				Ignore if mesh doesn't exist
-			*/
-			{
-				//JMutexAutoLock lock(block->mesh_mutex);
-
-				if(block->mesh == NULL){
-					blocks_in_range_without_mesh++;
-					continue;
-				}
-			}
-
-			/*
 				Occlusion culling
 			*/
 
 			// No occlusion culling when free_move is on and camera is
-			// inside ground
+			// inside ground.
 			bool occlusion_culling_enabled = true;
 			if(g_settings->getBool("free_move")){
 				MapNode n = getNodeNoEx(cam_pos_nodes);
@@ -368,6 +359,26 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 			{
 				blocks_occlusion_culled++;
 				continue;
+			}
+
+			/*
+				Ignore if mesh doesn't exist
+			*/
+			{
+				//JMutexAutoLock lock(block->mesh_mutex);
+
+				if(block->mesh == NULL){
+					blocks_in_range_without_mesh++;
+          core::map<v3s16, bool>::Iterator i =
+            m_last_blocks_needed.find(block->getPos());
+          if (!(i.getNode())) {
+            // Don't set it to false if it's already true.
+            m_last_blocks_needed.set(block->getPos(), false);
+          }
+					continue;
+				} else {
+          m_last_blocks_needed.set(block->getPos(), true);
+        }
 			}
 			
 			// This block is in range. Reset usage timer.
@@ -737,4 +748,41 @@ void ClientMap::PrintInfo(std::ostream &out)
 	out<<"ClientMap: ";
 }
 
+const core::map<v3s16, bool>& ClientMap::nextBlocksToRequest()
+{
+  if (m_next_to_request_list_needs_culling) {
+    // Don't try to request blocks that have no data and whose neighbors
+    // also all lack data. We can't tell if these blocks would
+    // be occlusion-culled until we have nearby geometry.
+    core::map<v3s16, bool>::Iterator i;
+    for(i=m_last_blocks_needed.getIterator(); !i.atEnd(); i++) {
+      if (i->getValue() == true) continue;
 
+      bool cull = true;
+      v3s16 p = i->getKey();
+      v3s16 p0 = p - v3s16(1,1,1);
+      v3s16 p1 = p + v3s16(1,1,1);
+      for(int x = p0.X; x <= p1.X; ++x) {
+        for(int y = p0.Y; y <= p1.Y; ++y) {
+          for(int z = p0.Z; z <= p1.Z; ++z) {
+            core::map<v3s16, bool>::Iterator i =
+              m_last_blocks_needed.find(v3s16(x,y,z));
+            if (i.getNode() && i->getValue() == true) {
+              cull = false; break;
+            }
+          }
+          if (!cull) break;
+        }
+        if (!cull) break;
+      }
+
+      if (cull) {
+        m_last_blocks_needed.remove(p);
+      }
+    }
+
+    m_next_to_request_list_needs_culling = false;
+  }
+
+  return m_last_blocks_needed;
+}
