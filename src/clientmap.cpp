@@ -361,6 +361,20 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 				continue;
 			}
 
+      /*
+        Note for later that we were trying to display this block.
+      */
+      if(block->isDummy()) {
+        core::map<v3s16, bool>::Iterator i =
+          m_last_blocks_needed.find(block->getPos());
+        if (!(i.getNode())) {
+          // Don't set it to false if it's already true.
+          m_last_blocks_needed.set(block->getPos(), false);
+        }
+      } else {
+        m_last_blocks_needed.set(block->getPos(), true);
+      }
+
 			/*
 				Ignore if mesh doesn't exist
 			*/
@@ -369,15 +383,7 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 
 				if(block->mesh == NULL){
 					blocks_in_range_without_mesh++;
-          core::map<v3s16, bool>::Iterator i =
-            m_last_blocks_needed.find(block->getPos());
-          if (!(i.getNode())) {
-            // Don't set it to false if it's already true.
-            m_last_blocks_needed.set(block->getPos(), false);
-          }
 					continue;
-				} else {
-          m_last_blocks_needed.set(block->getPos(), true);
         }
 			}
 			
@@ -756,7 +762,7 @@ const core::map<v3s16, bool>& ClientMap::nextBlocksToRequest()
     // be occlusion-culled until we have nearby geometry.
     core::map<v3s16, bool>::Iterator i;
     for(i=m_last_blocks_needed.getIterator(); !i.atEnd(); i++) {
-      if (i->getValue() == true) continue;
+      if (i->getValue() == true) continue; // Don't cull blocks with data
 
       bool cull = true;
       v3s16 p = i->getKey();
