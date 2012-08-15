@@ -65,9 +65,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 		TOSERVER_INVENTORY_FIELDS
 		16-bit node ids
 		TOCLIENT_DETACHED_INVENTORY
+  PROTOCOL_VERSION 13:
+    Versioned block data
+    TOSERVER_REQUEST_BLOCKS
 */
 
-#define PROTOCOL_VERSION 12
+#define PROTOCOL_VERSION 13
 
 #define PROTOCOL_ID 0x4f457403
 
@@ -93,6 +96,14 @@ enum ToClientCommand
 	*/
 
 	TOCLIENT_BLOCKDATA = 0x20, //TODO: Multiple blocks
+  /*
+     [0] u16 command
+     [2] v3s16 position
+     [8] u32 change counter
+     Remainder is serialized MapBlock
+  */
+
+
 	TOCLIENT_ADDNODE = 0x21,
 	TOCLIENT_REMOVENODE = 0x22,
 	

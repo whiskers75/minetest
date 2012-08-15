@@ -3308,13 +3308,14 @@ void Server::SendBlockNoLock(u16 peer_id, MapBlock *block, u8 ver)
 	std::string s = os.str();
 	SharedBuffer<u8> blockdata((u8*)s.c_str(), s.size());
 
-	u32 replysize = 8 + blockdata.getSize();
+	u32 replysize = 12 + blockdata.getSize();
 	SharedBuffer<u8> reply(replysize);
 	writeU16(&reply[0], TOCLIENT_BLOCKDATA);
 	writeS16(&reply[2], p.X);
 	writeS16(&reply[4], p.Y);
 	writeS16(&reply[6], p.Z);
-	memcpy(&reply[8], *blockdata, blockdata.getSize());
+  writeU32(&reply[8], block->getChangeCounter());
+	memcpy(&reply[12], *blockdata, blockdata.getSize());
 
   g_profiler->add("Server: blocks sent", 1);
 

@@ -1012,34 +1012,38 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 	else if(command == TOCLIENT_BLOCKDATA)
 	{
 		// Ignore too small packet
-		if(datasize < 8)
+		if(datasize < 12)
 			return;
 			
 		v3s16 p;
 		p.X = readS16(&data[2]);
 		p.Y = readS16(&data[4]);
 		p.Z = readS16(&data[6]);
-		
-		/*infostream<<"Client: Thread: BLOCKDATA for ("
-				<<p.X<<","<<p.Y<<","<<p.Z<<")"<<std::endl;*/
-		/*infostream<<"Client: Thread: BLOCKDATA for ("
-				<<p.X<<","<<p.Y<<","<<p.Z<<")"<<std::endl;*/
-		
-		std::string datastring((char*)&data[8], datasize-8);
-		std::istringstream istr(datastring, std::ios_base::binary);
+    u32 change_counter = readU32(&data[8]);
 
-		MapSector *sector;
+    MapSector *sector;
 		MapBlock *block;
-		
 		v2s16 p2d(p.X, p.Z);
 		sector = m_env.getMap().emergeSector(p2d);
-		
 		assert(sector->getPos() == p2d);
-
-		//TimeTaker timer("MapBlock deSerialize");
-		// 0ms
-		
 		block = sector->getBlockNoCreateNoEx(p.Y);
+    if (block && block->getChangeCounter() >= change_counter) {
+      // We already have a newer version of this block
+      // Don't need to bother deserializing
+      return;
+    }
+		
+		/*infostream<<"Client: Thread: BLOCKDATA for ("
+				<<p.X<<","<<p.Y<<","<<p.Z<<")"<<std::endl;*/
+		/*infostream<<"Client: Thread: BLOCKDATA for ("
+				<<p.X<<","<<p.Y<<","<<p.Z<<")"<<std::endl;*/
+		
+		std::string datastring((char*)&data[12], datasize-12);
+		std::istringstream istr(datastring, std::ios_base::binary);
+		
+    //TimeTaker timer("MapBlock deSerialize");
+		// 0ms
+
 		if(block)
 		{
 			/*
@@ -1057,6 +1061,7 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 			//infostream<<"Creating new"<<std::endl;
 			block = new MapBlock(&m_env.getMap(), p, this);
 			block->deSerialize(istr, ser_version, false);
+      block->setChangeCounter(change_counter);
 			sector->insertBlock(block);
 		}
 
