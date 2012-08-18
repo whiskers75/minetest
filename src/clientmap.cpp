@@ -749,6 +749,34 @@ void ClientMap::renderPostFx()
 	}
 }
 
+void ClientMap::renderBlockBoundaries()
+{
+	video::IVideoDriver* driver = SceneManager->getVideoDriver();
+  video::SMaterial mat;
+  mat.Lighting = false;
+  mat.Thickness = 1;
+  driver->setMaterial(mat);
+  driver->clearZBuffer();
+
+  core::aabbox3d<f32> boundary_box;
+  core::map<v3s16, bool>& blocks =
+    const_cast<core::map<v3s16, bool>&>(nextBlocksToRequest());
+  core::map<v3s16, bool>::Iterator i;
+  v3f inset(2.5);
+  v3f blocksize(MAP_BLOCKSIZE, MAP_BLOCKSIZE, MAP_BLOCKSIZE);
+  for (i=blocks.getIterator(); !i.atEnd(); i++) {
+    v3s16 bpos = i->getKey();
+    boundary_box.MinEdge = intToFloat(i->getKey(), BS)*blocksize
+      + inset
+      - v3f(BS)*0.5;
+    boundary_box.MaxEdge = boundary_box.MinEdge
+      + blocksize*BS
+      - inset
+      - inset;
+    driver->draw3DBox(boundary_box, video::SColor(255, 255, 0, 255));
+  }
+}
+
 void ClientMap::PrintInfo(std::ostream &out)
 {
 	out<<"ClientMap: ";

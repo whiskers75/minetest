@@ -1246,6 +1246,7 @@ void the_game(
 	bool disable_camera_update = false;
 	bool show_debug = g_settings->getBool("show_debug");
 	bool show_profiler_graph = false;
+  bool show_block_boundaries = false;
 	u32 show_profiler = 0;
 	u32 show_profiler_max = 3;  // Number of pages
 
@@ -1701,6 +1702,15 @@ void the_game(
 				statustext_time = 0;
 			}
 		}
+    else if(input->wasKeyDown(getKeySetting("keymap_toggle_block_boundaries")))
+    {
+			show_block_boundaries = !show_block_boundaries;
+			if(show_block_boundaries)
+				statustext = L"Block boundaries shown";
+			else
+				statustext = L"Block boundaries hidden";
+			statustext_time = 0;
+    }
 		else if(input->wasKeyDown(getKeySetting("keymap_increase_viewing_range_min")))
 		{
 			s16 range = g_settings->getS16("viewing_range_nodes_min");
@@ -2734,6 +2744,14 @@ void the_game(
 		m.Thickness = 3;
 		m.Lighting = false;
 		driver->setMaterial(m);
+
+    /*
+      Block boundary visualization
+    */
+
+    if (show_block_boundaries) {
+			client.getEnv().getClientMap().renderBlockBoundaries();
+    }
 
 		driver->setTransform(video::ETS_WORLD, core::IdentityMatrix);
 
