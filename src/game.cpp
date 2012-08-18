@@ -2738,12 +2738,6 @@ void the_game(
 		
 		//timer9.stop();
 		//TimeTaker //timer10("//timer10");
-		
-		video::SMaterial m;
-		//m.Thickness = 10;
-		m.Thickness = 3;
-		m.Lighting = false;
-		driver->setMaterial(m);
 
     /*
       Block boundary visualization
@@ -2752,6 +2746,12 @@ void the_game(
     if (show_block_boundaries) {
 			client.getEnv().getClientMap().renderBlockBoundaries();
     }
+
+		video::SMaterial m;
+		//m.Thickness = 10;
+		m.Thickness = 3;
+		m.Lighting = false;
+		driver->setMaterial(m);
 
 		driver->setTransform(video::ETS_WORLD, core::IdentityMatrix);
 

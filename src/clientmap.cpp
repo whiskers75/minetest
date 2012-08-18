@@ -754,9 +754,10 @@ void ClientMap::renderBlockBoundaries()
 	video::IVideoDriver* driver = SceneManager->getVideoDriver();
   video::SMaterial mat;
   mat.Lighting = false;
-  mat.Thickness = 1;
+  mat.Thickness = 3;
+  mat.ZBuffer = video::ECFN_ALWAYS;
+  mat.ZWriteEnable = false;
   driver->setMaterial(mat);
-  driver->clearZBuffer();
 
   core::aabbox3d<f32> boundary_box;
   core::map<v3s16, bool>& blocks =
