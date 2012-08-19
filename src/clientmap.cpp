@@ -179,7 +179,7 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 	if(pass == scene::ESNRP_SOLID)
 	{
 		m_last_drawn_sectors.clear();
-    m_last_blocks_needed.clear();
+    m_last_blocks_needed.clear(); // FIXME: Should reset this less often
     m_next_to_request_list_needs_culling = true;
 	}
 

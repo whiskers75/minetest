@@ -602,7 +602,7 @@ void Client::step(float dtime)
 	}
 
 	/*
-    Request nearby blocks
+    Request blocks
   */
   {
     float &counter = m_request_blocks_timer;
@@ -1935,38 +1935,78 @@ void Client::sendPlayerItem(u16 item)
 
 void Client::sendRequestForBlocks()
 {
-  std::ostringstream os(std::ios_base::binary);
-  u8 buf[6];
-
+  // Request blocks viewable by the player at last draw
+  core::map<v3s16, bool>& viewable_blocks =
+    const_cast<core::map<v3s16, bool>&>(
+      m_env.getClientMap().nextBlocksToRequest()
+    );
+  core::map<v3s16, bool>::Iterator i;
+  
+  // Also always request blocks adjacent to the player
+  core::map<v3s16, bool> adjacent_blocks;
   Player* player = m_env.getLocalPlayer();
-  v3s16 blockpos = getNodeBlockPos(floatToInt(player->getPosition(), BS));
-
-  writeU16(buf, TOSERVER_REQUEST_BLOCKS);
-  os.write((char*)buf, 2);
-  
-  v3s16 pos_0 = blockpos - v3s16(1,1,1);
-  writeV3S16(buf, pos_0);
-  os.write((char*)buf, 6);
-  
-  v3s16 pos_1 = blockpos + v3s16(1,1,1);
-  writeV3S16(buf, pos_1);
-  os.write((char*)buf, 6);
-
-  for(int x = pos_0.X; x <= pos_1.X; ++x) {
-    for(int y = pos_0.Y; y <= pos_1.Y; ++y) {
-      for(int z = pos_0.Z; z <= pos_1.Z; ++z) {
-        v3s16 p = v3s16(x,y,z);
-        u32 local_change_counter = BLOCK_CHANGECOUNTER_UNDEFINED;
-        MapBlock *b = m_env.getMap().getBlockNoCreateNoEx(p);
-        if (b != NULL) {
-          local_change_counter = b->getChangeCounter();
-        }
-        writeU32(buf, local_change_counter);
-        os.write((char*)buf, 4);
+  v3s16 pbpos = getNodeBlockPos(floatToInt(player->getPosition(), BS));
+  for(int x = pbpos.X-1; x <= pbpos.X+1; ++x) {
+    for(int y = pbpos.Y-1; y <= pbpos.X+1; ++y) {
+      for(int z = pbpos.Z-1; z <= pbpos.Z+1; ++z) {
+        adjacent_blocks.set(v3s16(x,y,z), true);
       }
     }
   }
 
+  // Find the coordinate range and change counters of requested blocks
+  bool first_block = true;
+  v3s16 req_min_pos, req_max_pos;
+  core::map<v3s16, u32> request_block_ccs;
+  for (int m = 0; m < 2; ++m)
+  {
+    core::map<v3s16, bool>* map =
+      (m == 0 ? &viewable_blocks : &adjacent_blocks);
+
+    for (core::map<v3s16, bool>::Iterator i = map->getIterator();
+         i.atEnd() == false; i++)
+    {
+      v3s16 bpos = i->getKey();
+      if (first_block) {
+        req_min_pos = req_max_pos = bpos;
+        first_block = false;
+      } else {
+        if (bpos.X < req_min_pos.X) req_min_pos.X = bpos.X;
+        if (bpos.Y < req_min_pos.Y) req_min_pos.Y = bpos.Y;
+        if (bpos.Z < req_min_pos.Z) req_min_pos.Z = bpos.Z;
+        if (bpos.X > req_max_pos.X) req_max_pos.X = bpos.X;
+        if (bpos.Y > req_max_pos.Y) req_max_pos.Y = bpos.Y;
+        if (bpos.Z > req_max_pos.Z) req_max_pos.Z = bpos.Z;
+      }
+
+      MapBlock* b = m_env.getMap().getBlockNoCreateNoEx(bpos);
+      u32 cc = 0; // Request any by default (allocated blocks start at 1)
+      if (b != NULL) cc = b->getChangeCounter();
+      request_block_ccs.set(bpos, cc);
+    }
+  }
+
+  // Write the request
+  std::ostringstream os(std::ios_base::binary);
+  u8 buf[6];
+  writeU16(buf, TOSERVER_REQUEST_BLOCKS); os.write((char*)buf, 2);
+  writeV3S16(buf, req_min_pos); os.write((char*)buf, 6);
+  writeV3S16(buf, req_max_pos); os.write((char*)buf, 6);
+  for (int x = req_min_pos.X; x <= req_max_pos.X; ++x) {
+    for (int y = req_min_pos.Y; y <= req_max_pos.Y; ++y) {
+      for (int z = req_min_pos.Z; z <= req_max_pos.Z; ++z) {
+        v3s16 bpos = v3s16(x,y,z);
+        u32 cc = BLOCK_CHANGECOUNTER_UNDEFINED; // Unrequested block
+        core::map<v3s16, u32>::Iterator bi = request_block_ccs.find(bpos);
+        if (bi.getNode()) {
+          cc = bi->getValue();
+        }
+        writeU32(buf, cc); os.write((char*)buf, 4);
+      }
+    }
+  }
+
+  // Send the request
 	std::string s = os.str();
 	SharedBuffer<u8> data((u8*)s.c_str(), s.size());
 	Send(0, data, false); // Send as unreliable

@@ -1802,12 +1802,14 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
           u32 client_change_counter = readU32(&data[2+6+6+offset]);
           offset += 4;
           
+          // FIXME Limit # of blocks sent per request, prioritize closer blocks
           MapBlock *block = map.getBlockNoCreateNoEx(p);
           if (block != NULL && !(block->isDummy()) && block->isValid() &&
           block->isGenerated()
           ) {
             block->resetUsageTimer();
             if (client_change_counter == BLOCK_CHANGECOUNTER_UNDEFINED || block->getChangeCounter() > client_change_counter) {
+              // TODO Should this be in a different thread?
               SendBlockNoLock(peer_id, block, client->serialization_version);
             }
           } else {
