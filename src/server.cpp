@@ -2504,9 +2504,13 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 				if(m_env->getMap().getNodeNoEx(p_under).getContent() != CONTENT_AIR)
 				{
 					// Re-send block to revert change on client-side
-					RemoteClient *client = getClient(peer_id);
+					//RemoteClient *client = getClient(peer_id);
 					v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_under, BS));
-					client->SetBlockNotSent(blockpos);
+					// FIXME: This is not optimal at all because this re-sends them
+					//        to everyone instead of the current client only
+					MapBlock *block = map.getBlockNoCreateNoEx(blockpos);
+					if (block)
+						block->raiseModified(MOD_STATE_CLEAN,"interactDenied");
 				}
 			}
 		} // action == 2
@@ -2550,9 +2554,13 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 			// If item has node placement prediction, always send the above
 			// node to make sure the client knows what exactly happened
 			if(item.getDefinition(m_itemdef).node_placement_prediction != ""){
-				RemoteClient *client = getClient(peer_id);
+				//RemoteClient *client = getClient(peer_id);
 				v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_above, BS));
-				client->SetBlockNotSent(blockpos);
+				// FIXME: This is not optimal at all because this re-sends them
+				//        to everyone instead of the current client only
+				MapBlock *block = map.getBlockNoCreateNoEx(blockpos);
+				if (block)
+					block->raiseModified(MOD_STATE_CLEAN,"interactDenied");
 			}
 		} // action == 3
 
