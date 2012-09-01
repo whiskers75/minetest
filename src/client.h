@@ -330,10 +330,10 @@ private:
 	float m_avg_rtt_timer;
 	float m_playerpos_send_timer;
 	float m_ignore_damage_timer; // Used after server moves player
-  float m_request_blocks_timer;
+	float m_request_blocks_timer;
 	IntervalLimiter m_map_timer_and_unload_interval;
 
-  void sendRequestForBlocks();
+	void sendRequestForBlocks();
 
 	IWritableTextureSource *m_tsrc;
 	IWritableItemDefManager *m_itemdef;

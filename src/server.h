@@ -77,6 +77,7 @@ v3f findSpawnPos(ServerMap &map);
 struct QueuedBlockEmerge
 {
 	v3s16 pos;
+	float priority; // Larger = more important
 };
 
 /*
@@ -102,26 +103,49 @@ public:
 		}
 	}
 	
-	void addBlock(v3s16 pos)
+	void addBlock(v3s16 pos, float priority)
 	{
 		DSTACK(__FUNCTION_NAME);
 	
 		JMutexAutoLock lock(m_mutex);
+		
+		// Remove from queue if it's not already queued
+		for(core::list<QueuedBlockEmerge*>::Iterator
+				i=m_queue.begin(); i!=m_queue.end(); i++)
+		{
+			QueuedBlockEmerge *q = *i;
+			if(q->pos == pos){
+				if(q->priority > priority){
+					// Already in queue with a higher priority
+					return;
+				} else{
+					// In queue with a lower priority; remove and re-add
+					delete q;
+					m_queue.erase(i);
+					break;
+				}
+			}
+		}
+	
+		// Add to queue
 
-			/*
-			Add the block if it's not already queued
-			*/
-			core::list<QueuedBlockEmerge*>::Iterator i;
-			for(i=m_queue.begin(); i!=m_queue.end(); i++)
+		QueuedBlockEmerge *newq = new QueuedBlockEmerge;
+		newq->pos = pos;
+		newq->priority = priority;
+
+		if(m_queue.empty()){
+			m_queue.push_back(newq);
+		} else {
+			for(core::list<QueuedBlockEmerge*>::Iterator
+					i=m_queue.begin(); i!=m_queue.end(); i++)
 			{
 				QueuedBlockEmerge *q = *i;
-				if(q->pos == pos)
+				if(q->priority < priority){
+					m_queue.insert_before(i, newq);
 					return;
 				}
-		
-		QueuedBlockEmerge *q = new QueuedBlockEmerge;
-		q->pos = pos;
-		m_queue.push_back(q);
+			}
+		}
 	}
 
 	// Returned pointer must be deleted
@@ -145,6 +169,7 @@ public:
 	}
 	
 private:
+	// Sorted by priority; highest first
 	core::list<QueuedBlockEmerge*> m_queue;
 	JMutex m_mutex;
 };

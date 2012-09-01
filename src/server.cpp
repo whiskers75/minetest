@@ -1795,9 +1795,11 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		int timeout_ms = readU16(is);
 		v3s16 pos_0 = readV3S16(is);
 		v3s16 pos_1 = readV3S16(is);
-
+		
+		dstream<<"pos_0: "<<PP(pos_0)<<", pos_1: "<<PP(pos_1)<<std::endl;
+		dstream<<"packet queue length: "<<m_con.GetPeerOutgoingQueueSize(peer_id)<<std::endl;
+		
 		RemoteClient *client = getClient(peer_id);
-		u16 offset = 0;
 		v3s16 p;
 		for(p.X = pos_0.X; p.X <= pos_1.X; ++p.X) {
 			for(p.Y = pos_0.Y; p.Y <= pos_1.Y; ++p.Y) {
@@ -1806,7 +1808,9 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 						throw con::InvalidIncomingDataException
 							("REQUEST_BLOCKS data length is too short");
 					u32 client_change_counter = readU32(is);
-					offset += 4;
+					// Ignore unrequested block
+					if(client_change_counter == BLOCK_CHANGECOUNTER_UNDEFINED)
+						continue;
 					
 					// FIXME Limit # of blocks sent per request, prioritize closer blocks
 					MapBlock *block = map.getBlockNoCreateNoEx(p);
@@ -1814,12 +1818,16 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 							block->isGenerated())
 					{
 						block->resetUsageTimer();
-						if (client_change_counter == BLOCK_CHANGECOUNTER_UNDEFINED || block->getChangeCounter() > client_change_counter) {
+						if (block->getChangeCounter() > client_change_counter) {
 							// TODO Should this be in a different thread?
 							SendBlockNoLock(peer_id, block, client->serialization_version);
 						}
 					} else {
-						m_emerge_queue.addBlock(p);
+						v3f pf = intToFloat(p * MAP_BLOCKSIZE, BS);
+						pf += v3f(1,1,1) * MAP_BLOCKSIZE * BS / 2;
+						float d = (player->getPosition() - pf).getLength();
+						float priority = -d;
+						m_emerge_queue.addBlock(p, priority);
 						m_emergethread.trigger();
 					}
 				}

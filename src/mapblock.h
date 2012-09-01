@@ -153,28 +153,28 @@ public:
 	// m_modified methods
 	void raiseModified(u32 mod, const std::string &reason="unknown")
 	{
-    if (m_parent->mapType() == MAPTYPE_SERVER) {
-      ++m_change_counter;
+		if (m_parent->mapType() == MAPTYPE_SERVER) {
+			++m_change_counter;
 
-      if(mod > m_modified){
-        m_modified = mod;
-        m_modified_reason = reason;
-        m_modified_reason_too_long = false;
+			if(mod > m_modified){
+				m_modified = mod;
+				m_modified_reason = reason;
+				m_modified_reason_too_long = false;
 
-        if(m_modified >= MOD_STATE_WRITE_AT_UNLOAD){
-          m_disk_timestamp = m_timestamp;
-        }
-      } else if(mod == m_modified){
-        if(!m_modified_reason_too_long){
-          if(m_modified_reason.size() < 40)
-            m_modified_reason += ", " + reason;
-          else{
-            m_modified_reason += "...";
-            m_modified_reason_too_long = true;
-          }
-        }
-      }
-    }
+				if(m_modified >= MOD_STATE_WRITE_AT_UNLOAD){
+					m_disk_timestamp = m_timestamp;
+				}
+			} else if(mod == m_modified){
+				if(!m_modified_reason_too_long){
+					if(m_modified_reason.size() < 40)
+						m_modified_reason += ", " + reason;
+					else{
+						m_modified_reason += "...";
+						m_modified_reason_too_long = true;
+					}
+				}
+			}
+		}
 	}
 	u32 getModified()
 	{
@@ -420,17 +420,17 @@ public:
 		return m_disk_timestamp;
 	}
 
-  /*
-    Only use setChangeCounter on the client side, where it can mean
-    "this is the change number that this block is contemporary with".
-    On the server, the counter should only be updated by raiseModified.
-  */
-  void setChangeCounter(u32 cc) {
-    m_change_counter = cc;
-  }
-  u32 getChangeCounter() {
-    return m_change_counter;
-  }
+	/*
+		Only use setChangeCounter on the client side, where it can mean
+		"this is the change number that this block is contemporary with".
+		On the server, the counter should only be updated by raiseModified.
+	*/
+	void setChangeCounter(u32 cc) {
+		m_change_counter = cc;
+	}
+	u32 getChangeCounter() {
+		return m_change_counter;
+	}
 	
 	/*
 		See m_usage_timer
@@ -538,7 +538,7 @@ private:
 
 	/*
 		- On the server, this is used for telling whether the
-		  block has been modified from the one on disk.
+			block has been modified from the one on disk.
 		- On the client, this is used for nothing.
 	*/
 	u32 m_modified;
@@ -578,16 +578,16 @@ private:
 	// The on-disk (or to-be on-disk) timestamp value
 	u32 m_disk_timestamp;
 
-  /*
-    Incremented whenever the block changes. Used to
-    determine whether clients have the latest version of a block or
-    not.
-    - On the server, this is updated only when the block
-    changes.
-    - On the client, updated when the client receives updated
-    block information from the server.
-  */
-  u32 m_change_counter;
+	/*
+		Incremented whenever the block changes. Used to
+		determine whether clients have the latest version of a block or
+		not.
+		- On the server, this is updated only when the block
+		changes.
+		- On the client, updated when the client receives updated
+		block information from the server.
+	*/
+	u32 m_change_counter;
 
 	/*
 		When the block is accessed, this is set to 0.
@@ -599,7 +599,7 @@ private:
 inline bool blockpos_over_limit(v3s16 p)
 {
 	return
-	  (p.X < -MAP_GENERATION_LIMIT / MAP_BLOCKSIZE
+		(p.X < -MAP_GENERATION_LIMIT / MAP_BLOCKSIZE
 	|| p.X >  MAP_GENERATION_LIMIT / MAP_BLOCKSIZE
 	|| p.Y < -MAP_GENERATION_LIMIT / MAP_BLOCKSIZE
 	|| p.Y >  MAP_GENERATION_LIMIT / MAP_BLOCKSIZE

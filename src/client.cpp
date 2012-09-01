@@ -641,7 +641,12 @@ void Client::step(float dtime)
 				<<std::endl;*/
 		
 		int num_processed_meshes = 0;
-		while(m_mesh_update_thread.m_queue_out.size() > 0)
+		// Spread out load between frames (drawing a new mesh causes huge
+		// frametime spikes on some GPUs)
+		int max_process_count = m_mesh_update_thread.m_queue_out.size()
+				* m_mesh_update_thread.m_queue_out.size() / 100 + 1;
+		while(m_mesh_update_thread.m_queue_out.size() > 0 &&
+				num_processed_meshes < max_process_count)
 		{
 			num_processed_meshes++;
 			MeshUpdateResult r = m_mesh_update_thread.m_queue_out.pop_front();
@@ -1012,14 +1017,14 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 	else if(command == TOCLIENT_BLOCKDATA)
 	{
 		// Ignore too small packet
-		if(datasize < 12)
+		if(datasize < 2)
 			return;
 			
-		v3s16 p;
-		p.X = readS16(&data[2]);
-		p.Y = readS16(&data[4]);
-		p.Z = readS16(&data[6]);
-		u32 change_counter = readU32(&data[8]);
+		std::string datastring((char*)&data[2], datasize-2);
+		std::istringstream is(datastring, std::ios_base::binary);
+		
+		v3s16 p = readV3S16(is);
+		u32 change_counter = readU32(is);
 
 		MapSector *sector;
 		MapBlock *block;
@@ -1033,13 +1038,12 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 			return;
 		}
 		
+		ScopeProfiler sp(g_profiler, "Client: TOCLIENT_BLOCKDATA", SPT_AVG);
+
 		/*infostream<<"Client: Thread: BLOCKDATA for ("
 				<<p.X<<","<<p.Y<<","<<p.Z<<")"<<std::endl;*/
 		/*infostream<<"Client: Thread: BLOCKDATA for ("
 				<<p.X<<","<<p.Y<<","<<p.Z<<")"<<std::endl;*/
-		
-		std::string datastring((char*)&data[12], datasize-12);
-		std::istringstream istr(datastring, std::ios_base::binary);
 		
 		//TimeTaker timer("MapBlock deSerialize");
 		// 0ms
@@ -1051,7 +1055,8 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 			*/
 
 			//infostream<<"Updating"<<std::endl;
-			block->deSerialize(istr, ser_version, false);
+			block->deSerialize(is, ser_version, false);
+			block->setChangeCounter(change_counter);
 		}
 		else
 		{
@@ -1060,7 +1065,7 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 			*/
 			//infostream<<"Creating new"<<std::endl;
 			block = new MapBlock(&m_env.getMap(), p, this);
-			block->deSerialize(istr, ser_version, false);
+			block->deSerialize(is, ser_version, false);
 			block->setChangeCounter(change_counter);
 			sector->insertBlock(block);
 		}
@@ -1935,33 +1940,39 @@ void Client::sendPlayerItem(u16 item)
 
 void Client::sendRequestForBlocks()
 {
-	// Request blocks viewable by the player at last draw
-	core::map<v3s16, bool>& viewable_blocks =
-		const_cast<core::map<v3s16, bool>&>(
-			m_env.getClientMap().nextBlocksToRequest()
-		);
-	core::map<v3s16, bool>::Iterator i;
-	
-	// Also always request blocks adjacent to the player
+	// Request blocks adjacent to the player
 	core::map<v3s16, bool> adjacent_blocks;
 	Player* player = m_env.getLocalPlayer();
 	v3s16 pbpos = getNodeBlockPos(floatToInt(player->getPosition(), BS));
 	for(int x = pbpos.X-1; x <= pbpos.X+1; ++x) {
-		for(int y = pbpos.Y-1; y <= pbpos.X+1; ++y) {
+		for(int y = pbpos.Y-1; y <= pbpos.Y+1; ++y) {
 			for(int z = pbpos.Z-1; z <= pbpos.Z+1; ++z) {
 				adjacent_blocks.set(v3s16(x,y,z), true);
 			}
 		}
 	}
-
+	
+	// Request blocks viewable by the player at last draw
+	core::map<v3s16, bool>& viewable_blocks =
+		const_cast<core::map<v3s16, bool>&>(
+			m_env.getClientMap().nextBlocksToRequest()
+		);
+	
+	core::map<v3s16, bool>::Iterator i;
+	
 	// Find the coordinate range and change counters of requested blocks
 	bool first_block = true;
 	v3s16 req_min_pos, req_max_pos;
 	core::map<v3s16, u32> request_block_ccs;
 	for (int m = 0; m < 2; ++m)
 	{
+		// If mesh generation is fully booked, skip other than adjacent blocks
+		if(m == 1 && (m_mesh_update_thread.m_queue_in.size() >= 15 ||
+				m_mesh_update_thread.m_queue_out.size() >= 15))
+			continue;
+
 		core::map<v3s16, bool>* map =
-			(m == 0 ? &viewable_blocks : &adjacent_blocks);
+			(m == 0 ? &adjacent_blocks : &viewable_blocks);
 
 		for (core::map<v3s16, bool>::Iterator i = map->getIterator();
 				 i.atEnd() == false; i++)
@@ -2340,7 +2351,7 @@ void Client::addUpdateMeshTaskWithEdge(v3s16 blockpos, bool urgent)
 	}
 	catch(InvalidPositionException &e){}
 	// Leading edge
-	/*try{
+	try{
 		v3s16 p = blockpos + v3s16(-1,0,0);
 		addUpdateMeshTask(p, urgent);
 	}
@@ -2354,7 +2365,7 @@ void Client::addUpdateMeshTaskWithEdge(v3s16 blockpos, bool urgent)
 		v3s16 p = blockpos + v3s16(0,0,-1);
 		addUpdateMeshTask(p, urgent);
 	}
-	catch(InvalidPositionException &e){}*/
+	catch(InvalidPositionException &e){}
 }
 
 void Client::addUpdateMeshTaskForNode(v3s16 nodepos, bool urgent)
