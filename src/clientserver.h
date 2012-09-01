@@ -49,7 +49,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 		Many things
 	PROTOCOL_VERSION 9:
 		ContentFeatures and NodeDefManager use a different serialization
-		    format; better for future version cross-compatibility
+			format; better for future version cross-compatibility
 		Many things
 	PROTOCOL_VERSION 10:
 		TOCLIENT_PRIVILEGES
@@ -65,9 +65,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 		TOSERVER_INVENTORY_FIELDS
 		16-bit node ids
 		TOCLIENT_DETACHED_INVENTORY
-  PROTOCOL_VERSION 13:
-    Versioned block data
-    TOSERVER_REQUEST_BLOCKS
+	PROTOCOL_VERSION 13:
+		Versioned block data
+		TOSERVER_REQUEST_BLOCKS
 */
 
 #define PROTOCOL_VERSION 13
@@ -96,13 +96,12 @@ enum ToClientCommand
 	*/
 
 	TOCLIENT_BLOCKDATA = 0x20, //TODO: Multiple blocks
-  /*
-     [0] u16 command
-     [2] v3s16 position
-     [8] u32 change counter
-     Remainder is serialized MapBlock
-  */
-
+	/*
+		 [0] u16 command
+		 [2] v3s16 position
+		 [8] u32 change counter
+		 Remainder is serialized MapBlock
+	*/
 
 	TOCLIENT_ADDNODE = 0x21,
 	TOCLIENT_REMOVENODE = 0x22,
@@ -365,14 +364,15 @@ enum ToServerCommand
 	*/
 
 	TOSERVER_REQUEST_BLOCKS=0x20,
-  /*
-		[0] u16 command
-		[2] v3s16 pos_0
-		[2+6] v3s16 pos_1
+	/*
+		u16 command
+		u16 timeout_ms
+		v3s16 pos_0
+		v3s16 pos_1
 		for each block {
-      u32 client_changenum
+			u32 client_changenum
 		}
-  */
+	*/
 
 	TOSERVER_ADDNODE = 0x21, // Obsolete
 	TOSERVER_REMOVENODE = 0x22, // Obsolete

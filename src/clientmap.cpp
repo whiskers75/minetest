@@ -48,7 +48,7 @@ ClientMap::ClientMap(
 	m_camera_position(0,0,0),
 	m_camera_direction(0,0,1),
 	m_camera_fov(M_PI),
-  m_next_to_request_list_needs_culling(false)
+	m_next_to_request_list_needs_culling(false)
 {
 	m_camera_mutex.Init();
 	assert(m_camera_mutex.IsInitialized());
@@ -179,8 +179,8 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 	if(pass == scene::ESNRP_SOLID)
 	{
 		m_last_drawn_sectors.clear();
-    m_last_blocks_needed.clear(); // FIXME: Should reset this less often
-    m_next_to_request_list_needs_culling = true;
+		m_last_blocks_needed.clear(); // FIXME: Should reset this less often
+		m_next_to_request_list_needs_culling = true;
 	}
 
 	/*
@@ -258,20 +258,20 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 	{
 	ScopeProfiler sco_p(g_profiler, prefix+"collecting blocks for drawing", SPT_AVG);
 
-  std::vector<MapSector*> drawable_sectors;
-  drawable_sectors.reserve(
-    (p_blocks_max.X-p_blocks_min.X+1)*
-    (p_blocks_max.Z-p_blocks_min.Z+1)
-  );
-  for(int sx = p_blocks_min.X; sx <= p_blocks_max.X; ++sx) {
-    for(int sy = p_blocks_min.Z; sy <= p_blocks_max.Z; ++sy) {
-      drawable_sectors.push_back(emergeSector(v2s16(sx,sy))); 
-    }
-  }
+	std::vector<MapSector*> drawable_sectors;
+	drawable_sectors.reserve(
+		(p_blocks_max.X-p_blocks_min.X+1)*
+		(p_blocks_max.Z-p_blocks_min.Z+1)
+	);
+	for(int sx = p_blocks_min.X; sx <= p_blocks_max.X; ++sx) {
+		for(int sy = p_blocks_min.Z; sy <= p_blocks_max.Z; ++sy) {
+			drawable_sectors.push_back(emergeSector(v2s16(sx,sy))); 
+		}
+	}
 
 	for(std::vector<MapSector*>::iterator si = drawable_sectors.begin();
 			si != drawable_sectors.end();
-      ++si)
+			++si)
 	{
 		MapSector *sector = *si;
 		v2s16 sp = sector->getPos();
@@ -291,9 +291,9 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 
 		u32 sector_blocks_drawn = 0;
 		
-    for(int by = p_blocks_min.Y; by <= p_blocks_max.Y; ++by)
+		for(int by = p_blocks_min.Y; by <= p_blocks_max.Y; ++by)
 		{
-      v3s16 bp(sp.X, by, sp.Y);
+			v3s16 bp(sp.X, by, sp.Y);
 
 			/*
 				Compare block position to camera position, skip
@@ -368,20 +368,20 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 				continue;
 			}
 
-      /*
-        Note for later that we were trying to display this block.
-      */
-      MapBlock* block = sector->getBlockNoCreateNoEx(bp.Y);
-      if(block == NULL || block->isDummy()) {
-        core::map<v3s16, bool>::Iterator i =
-          m_last_blocks_needed.find(bp);
-        if (!(i.getNode() && i->getValue() == true)) {
-          // Don't set it to false if it's already true.
-          m_last_blocks_needed.set(bp, false);
-        }
-      } else {
-        m_last_blocks_needed.set(bp, true);
-      }
+			/*
+				Note for later that we were trying to display this block.
+			*/
+			MapBlock* block = sector->getBlockNoCreateNoEx(bp.Y);
+			if(block == NULL || block->isDummy()) {
+				core::map<v3s16, bool>::Iterator i =
+					m_last_blocks_needed.find(bp);
+				if (!(i.getNode() && i->getValue() == true)) {
+					// Don't set it to false if it's already true.
+					m_last_blocks_needed.set(bp, false);
+				}
+			} else {
+				m_last_blocks_needed.set(bp, true);
+			}
 
 			/*
 				Ignore if block or mesh doesn't exist
@@ -392,7 +392,7 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 				if(block == NULL || block->mesh == NULL){
 					blocks_in_range_without_mesh++;
 					continue;
-        }
+				}
 			}
 			
 			// This block is in range. Reset usage timer.
@@ -760,51 +760,51 @@ void ClientMap::renderPostFx()
 void ClientMap::renderBlockBoundaries()
 {
 	video::IVideoDriver* driver = SceneManager->getVideoDriver();
-  video::SMaterial mat;
-  mat.Lighting = false;
-  mat.ZWriteEnable = false;
+	video::SMaterial mat;
+	mat.Lighting = false;
+	mat.ZWriteEnable = false;
 
-  core::aabbox3d<f32> bound;
-  core::map<v3s16, bool>& blocks =
-    const_cast<core::map<v3s16, bool>&>(nextBlocksToRequest());
-  core::map<v3s16, bool>::Iterator i;
-  const v3f inset(BS/2);
-  const v3f blocksize(MAP_BLOCKSIZE);
+	core::aabbox3d<f32> bound;
+	core::map<v3s16, bool>& blocks =
+		const_cast<core::map<v3s16, bool>&>(nextBlocksToRequest());
+	core::map<v3s16, bool>::Iterator i;
+	const v3f inset(BS/2);
+	const v3f blocksize(MAP_BLOCKSIZE);
 
-  for (int pass = 0; pass < 2; ++pass) {
-    video::SColor color_offset(0, 0, 0, 0);
-    if (pass == 0) {
-      mat.Thickness = 1;
-      mat.ZBuffer = video::ECFN_ALWAYS;
-      color_offset.setGreen(64);
-    } else {
-      mat.Thickness = 3;
-      mat.ZBuffer = video::ECFN_LESSEQUAL;
-    }
-    driver->setMaterial(mat);
+	for (int pass = 0; pass < 2; ++pass) {
+		video::SColor color_offset(0, 0, 0, 0);
+		if (pass == 0) {
+			mat.Thickness = 1;
+			mat.ZBuffer = video::ECFN_ALWAYS;
+			color_offset.setGreen(64);
+		} else {
+			mat.Thickness = 3;
+			mat.ZBuffer = video::ECFN_LESSEQUAL;
+		}
+		driver->setMaterial(mat);
 
-    for (i=blocks.getIterator(); !i.atEnd(); i++) {
-      video::SColor color(255, 0, 0, 0);
-      if (i->getValue() == true) {
-        color.setBlue(255);
-      } else {
-        color.setRed(255);
-        color.setGreen(128);
-      }
+		for (i=blocks.getIterator(); !i.atEnd(); i++) {
+			video::SColor color(255, 0, 0, 0);
+			if (i->getValue() == true) {
+				color.setBlue(255);
+			} else {
+				color.setRed(255);
+				color.setGreen(128);
+			}
 
-      v3s16 bpos = i->getKey();
-      bound.MinEdge = intToFloat(i->getKey(), BS)*blocksize
-        + inset
-        - v3f(BS)*0.5;
-      bound.MaxEdge = bound.MinEdge
-        + blocksize*BS
-        - inset
-        - inset;
-      color = color + color_offset;
+			v3s16 bpos = i->getKey();
+			bound.MinEdge = intToFloat(i->getKey(), BS)*blocksize
+				+ inset
+				- v3f(BS)*0.5;
+			bound.MaxEdge = bound.MinEdge
+				+ blocksize*BS
+				- inset
+				- inset;
+			color = color + color_offset;
 
-      driver->draw3DBox(bound, color);
-    }
-  }
+			driver->draw3DBox(bound, color);
+		}
+	}
 }
 
 void ClientMap::PrintInfo(std::ostream &out)
@@ -814,39 +814,39 @@ void ClientMap::PrintInfo(std::ostream &out)
 
 const core::map<v3s16, bool>& ClientMap::nextBlocksToRequest()
 {
-  if (m_next_to_request_list_needs_culling) {
-    // Don't try to request blocks that have no data and whose neighbors
-    // also all lack data. We can't tell if these blocks would
-    // be occlusion-culled until we have nearby geometry.
-    core::map<v3s16, bool>::Iterator i;
-    for(i=m_last_blocks_needed.getIterator(); !i.atEnd(); i++) {
-      if (i->getValue() == true) continue; // Don't cull blocks with data
+	if (m_next_to_request_list_needs_culling) {
+		// Don't try to request blocks that have no data and whose neighbors
+		// also all lack data. We can't tell if these blocks would
+		// be occlusion-culled until we have nearby geometry.
+		core::map<v3s16, bool>::Iterator i;
+		for(i=m_last_blocks_needed.getIterator(); !i.atEnd(); i++) {
+			if (i->getValue() == true) continue; // Don't cull blocks with data
 
-      bool cull = true;
-      v3s16 p = i->getKey();
-      v3s16 p0 = p - v3s16(1,1,1);
-      v3s16 p1 = p + v3s16(1,1,1);
-      for(int x = p0.X; x <= p1.X; ++x) {
-        for(int y = p0.Y; y <= p1.Y; ++y) {
-          for(int z = p0.Z; z <= p1.Z; ++z) {
-            core::map<v3s16, bool>::Iterator i =
-              m_last_blocks_needed.find(v3s16(x,y,z));
-            if (i.getNode() && i->getValue() == true) {
-              cull = false; break;
-            }
-          }
-          if (!cull) break;
-        }
-        if (!cull) break;
-      }
+			bool cull = true;
+			v3s16 p = i->getKey();
+			v3s16 p0 = p - v3s16(1,1,1);
+			v3s16 p1 = p + v3s16(1,1,1);
+			for(int x = p0.X; x <= p1.X; ++x) {
+				for(int y = p0.Y; y <= p1.Y; ++y) {
+					for(int z = p0.Z; z <= p1.Z; ++z) {
+						core::map<v3s16, bool>::Iterator i =
+							m_last_blocks_needed.find(v3s16(x,y,z));
+						if (i.getNode() && i->getValue() == true) {
+							cull = false; break;
+						}
+					}
+					if (!cull) break;
+				}
+				if (!cull) break;
+			}
 
-      if (cull) {
-        m_last_blocks_needed.remove(p);
-      }
-    }
+			if (cull) {
+				m_last_blocks_needed.remove(p);
+			}
+		}
 
-    m_next_to_request_list_needs_culling = false;
-  }
+		m_next_to_request_list_needs_culling = false;
+	}
 
-  return m_last_blocks_needed;
+	return m_last_blocks_needed;
 }

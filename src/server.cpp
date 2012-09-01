@@ -180,7 +180,7 @@ void * EmergeThread::Thread()
 		if(qptr == NULL)
 			break;
 		
-    g_profiler->add("EmergeThread: blocks emerged", 1);
+		g_profiler->add("EmergeThread: blocks emerged", 1);
 		SharedPtr<QueuedBlockEmerge> q(qptr);
 
 		v3s16 &p = q->pos;
@@ -261,7 +261,7 @@ void * EmergeThread::Thread()
 						SPT_AVG);
 				TimeTaker t("mapgen::make_block()");
 
-        g_profiler->add("EmergeThread: blocks generated", 1);
+				g_profiler->add("EmergeThread: blocks generated", 1);
 				mapgen::make_block(&data);
 
 				if(enable_mapgen_debug_info == false)
@@ -1218,14 +1218,14 @@ void Server::AsyncRunStep()
 			{
 				//infostream<<"Server: MEET_ADDNODE"<<std::endl;
 				prof.add("MEET_ADDNODE", 1);
-        float max_d = disable_single_change_sending ? 5 : 30;
+				float max_d = disable_single_change_sending ? 5 : 30;
 				sendAddNode(event->p, event->n, event->already_known_by_peer, max_d);
 			}
 			else if(event->type == MEET_REMOVENODE)
 			{
 				//infostream<<"Server: MEET_REMOVENODE"<<std::endl;
 				prof.add("MEET_REMOVENODE", 1);
-        float max_d = disable_single_change_sending ? 5 : 30;
+				float max_d = disable_single_change_sending ? 5 : 30;
 				sendRemoveNode(event->p, event->already_known_by_peer, max_d);
 			}
 			else if(event->type == MEET_BLOCK_NODE_METADATA_CHANGED)
@@ -1773,54 +1773,60 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 
 	ServerMap &map = (ServerMap&)(m_env->getMap());
 
-  if(command == TOSERVER_REQUEST_BLOCKS)
-  {
+	if(command == TOSERVER_REQUEST_BLOCKS)
+	{
 		/*
-      [0] u16 command
-      [2] v3s16 pos_0
-      [2+6] v3s16 pos_1
-      for each block {
-        u32 client_version
-      }
+			u16 command
+			u16 timeout_ms TODO: Send blocks elsewhere with a bit of bandwidth
+			                     throttling and obey this
+			v3s16 pos_0
+			v3s16 pos_1
+			for each block {
+				u32 client_version
+			}
 		*/
 
-    if(datasize < 2+6+6)
+		if(datasize < 2)
 			return;
 		
-    v3s16 pos_0 = readV3S16(&data[2]);
-    v3s16 pos_1 = readV3S16(&data[2+6]);
+		std::string datastring((char*)&data[2], datasize-2);
+		std::istringstream is(datastring, std::ios_base::binary);
+		
+		int timeout_ms = readU16(is);
+		v3s16 pos_0 = readV3S16(is);
+		v3s16 pos_1 = readV3S16(is);
 
 		RemoteClient *client = getClient(peer_id);
-    u16 offset = 0;
-    v3s16 p;
-    for(p.X = pos_0.X; p.X <= pos_1.X; ++p.X) {
-      for(p.Y = pos_0.Y; p.Y <= pos_1.Y; ++p.Y) {
-        for(p.Z = pos_0.Z; p.Z <= pos_1.Z; ++p.Z) {
-          if((s16)datasize < 2+6+6+offset+4)
-            throw con::InvalidIncomingDataException
-              ("REQUEST_BLOCKS data length is too short");
-          u32 client_change_counter = readU32(&data[2+6+6+offset]);
-          offset += 4;
-          
-          // FIXME Limit # of blocks sent per request, prioritize closer blocks
-          MapBlock *block = map.getBlockNoCreateNoEx(p);
-          if (block != NULL && !(block->isDummy()) && block->isValid() &&
-          block->isGenerated()
-          ) {
-            block->resetUsageTimer();
-            if (client_change_counter == BLOCK_CHANGECOUNTER_UNDEFINED || block->getChangeCounter() > client_change_counter) {
-              // TODO Should this be in a different thread?
-              SendBlockNoLock(peer_id, block, client->serialization_version);
-            }
-          } else {
-            m_emerge_queue.addBlock(p);
-            m_emergethread.trigger();
-          }
-        }
-      }
-    }
-  }
-  else if(command == TOSERVER_PLAYERPOS)
+		u16 offset = 0;
+		v3s16 p;
+		for(p.X = pos_0.X; p.X <= pos_1.X; ++p.X) {
+			for(p.Y = pos_0.Y; p.Y <= pos_1.Y; ++p.Y) {
+				for(p.Z = pos_0.Z; p.Z <= pos_1.Z; ++p.Z) {
+					if(!is.good())
+						throw con::InvalidIncomingDataException
+							("REQUEST_BLOCKS data length is too short");
+					u32 client_change_counter = readU32(is);
+					offset += 4;
+					
+					// FIXME Limit # of blocks sent per request, prioritize closer blocks
+					MapBlock *block = map.getBlockNoCreateNoEx(p);
+					if (block != NULL && !(block->isDummy()) && block->isValid() &&
+							block->isGenerated())
+					{
+						block->resetUsageTimer();
+						if (client_change_counter == BLOCK_CHANGECOUNTER_UNDEFINED || block->getChangeCounter() > client_change_counter) {
+							// TODO Should this be in a different thread?
+							SendBlockNoLock(peer_id, block, client->serialization_version);
+						}
+					} else {
+						m_emerge_queue.addBlock(p);
+						m_emergethread.trigger();
+					}
+				}
+			}
+		}
+	}
+	else if(command == TOSERVER_PLAYERPOS)
 	{
 		if(datasize < 2+12+12+4+4)
 			return;
@@ -3222,7 +3228,7 @@ void Server::sendRemoveNode(v3s16 p, u16 ignore_id, float far_d_nodes)
 		if(client->peer_id == ignore_id)
 			continue;
 		
-    // Don't send if player is far away from event
+		// Don't send if player is far away from event
 			Player *player = m_env->getPlayer(client->peer_id);
 			if(player)
 			{
@@ -3257,7 +3263,7 @@ void Server::sendAddNode(v3s16 p, MapNode n, u16 ignore_id, float far_d_nodes)
 		if(client->peer_id == ignore_id)
 			continue;
 
-    // Don't send if player is far away from event
+		// Don't send if player is far away from event
 			Player *player = m_env->getPlayer(client->peer_id);
 			if(player)
 			{
@@ -3324,10 +3330,10 @@ void Server::SendBlockNoLock(u16 peer_id, MapBlock *block, u8 ver)
 	writeS16(&reply[2], p.X);
 	writeS16(&reply[4], p.Y);
 	writeS16(&reply[6], p.Z);
-  writeU32(&reply[8], block->getChangeCounter());
+	writeU32(&reply[8], block->getChangeCounter());
 	memcpy(&reply[12], *blockdata, blockdata.getSize());
 
-  g_profiler->add("Server: blocks sent", 1);
+	g_profiler->add("Server: blocks sent", 1);
 
 	/*infostream<<"Server: Sending block ("<<p.X<<","<<p.Y<<","<<p.Z<<")"
 			<<":  \tpacket size: "<<replysize<<std::endl;*/
