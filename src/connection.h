@@ -569,6 +569,7 @@ public:
 	Address GetPeerAddress(u16 peer_id);
 	float GetPeerAvgRTT(u16 peer_id);
 	u32 GetPeerOutgoingQueueSize(u16 peer_id);
+	float GetPeerOutgoingQueueSizeSeconds(u16 peer_id);
 	void DeletePeer(u16 peer_id);
 	
 private:

@@ -1680,6 +1680,13 @@ u32 Connection::GetPeerOutgoingQueueSize(u16 peer_id)
 	return getPeer(peer_id)->m_num_queued;
 }
 
+float Connection::GetPeerOutgoingQueueSizeSeconds(u16 peer_id)
+{
+	JMutexAutoLock peerlock(m_peers_mutex);
+	Peer *peer = getPeer(peer_id);
+	return (float)peer->m_num_queued / peer->m_max_packets_per_second;
+}
+
 void Connection::DeletePeer(u16 peer_id)
 {
 	ConnectionCommand c;

@@ -77,7 +77,7 @@ v3f findSpawnPos(ServerMap &map);
 struct QueuedBlockEmerge
 {
 	v3s16 pos;
-	float priority; // Larger = more important
+	float priority; // Larger = more important; 0 = highest
 };
 
 /*
@@ -302,6 +302,103 @@ struct ServerPlayingSound
 {
 	ServerSoundParams params;
 	std::set<u16> clients; // peer ids
+};
+
+struct QueuedBlockSend
+{
+	int peer_id;
+	v3s16 pos;
+	float priority; // Larger = more important; 0 = highest
+	double timeout_timestamp;
+
+	QueuedBlockSend():
+		peer_id(0),
+		pos(0,0,0),
+		priority(0),
+		timeout_timestamp(0)
+	{}
+};
+
+class BlockSendQueue
+{
+public:
+	BlockSendQueue()
+	{
+	}
+
+	~BlockSendQueue()
+	{
+		core::list<QueuedBlockSend*>::Iterator i;
+		for(i=m_queue.begin(); i!=m_queue.end(); i++)
+		{
+			QueuedBlockSend *q = *i;
+			delete q;
+		}
+	}
+	
+	void addBlock(int peer_id, v3s16 pos, float priority, float timeout)
+	{
+		float timeout_timestamp = m_timestamp + timeout;
+	
+		// Remove from queue if it's not already queued
+		for(core::list<QueuedBlockSend*>::Iterator
+				i=m_queue.begin(); i!=m_queue.end(); i++)
+		{
+			QueuedBlockSend *q = *i;
+			if(q->peer_id == peer_id && q->pos == pos){
+				if(q->priority > priority && q->timeout_timestamp > timeout_timestamp){
+					// Already in queue with a higher priority and higher timoeut
+					return;
+				} else{
+					// In queue with a lower priority; remove and re-add
+					delete q;
+					m_queue.erase(i);
+					break;
+				}
+			}
+		}
+	
+		// Add to queue
+
+		QueuedBlockSend *newq = new QueuedBlockSend;
+		newq->peer_id = peer_id;
+		newq->pos = pos;
+		newq->priority = priority;
+		newq->timeout_timestamp = timeout_timestamp;
+
+		if(m_queue.empty()){
+			m_queue.push_back(newq);
+		} else {
+			for(core::list<QueuedBlockSend*>::Iterator
+					i=m_queue.begin(); i!=m_queue.end(); i++)
+			{
+				QueuedBlockSend *q = *i;
+				if(q->priority < priority){
+					m_queue.insert_before(i, newq);
+					return;
+				}
+			}
+		}
+	}
+
+	void step(double dtime)
+	{
+		m_timestamp += dtime;
+	}
+
+	u32 size()
+	{
+		return m_queue.size();
+	}
+	
+	// FIXME: This shouldn't require the server at all; the data should be fed
+	// in addBlock and only the connection should be needed here
+	void send(Server &server, float packet_queue_max_seconds);
+
+private:
+	// Sorted by priority; highest first
+	core::list<QueuedBlockSend*> m_queue;
+	double m_timestamp;
 };
 
 class RemoteClient
@@ -781,6 +878,7 @@ private:
 
 	friend class EmergeThread;
 	friend class RemoteClient;
+	friend class BlockSendQueue;
 
 	std::map<std::string,MediaInfo> m_media;
 
@@ -795,6 +893,9 @@ private:
 	*/
 	// key = name
 	std::map<std::string, Inventory*> m_detached_inventories;
+
+	/* Block send queue */
+	BlockSendQueue m_block_send_queue;
 };
 
 /*

@@ -611,12 +611,13 @@ void Client::step(float dtime)
 		Request blocks
 	*/
 	{
+		float interval = 0.5;
 		float &counter = m_request_blocks_timer;
 		counter += dtime;
-		if (counter >= 1)
+		if (counter >= interval)
 		{
 			counter = 0.0;
-			sendRequestForBlocks();
+			sendRequestForBlocks(interval);
 		}
 	}
 
@@ -1960,7 +1961,7 @@ void Client::sendPlayerItem(u16 item)
 	Send(0, data, true);
 }
 
-void Client::sendRequestForBlocks()
+void Client::sendRequestForBlocks(float timeout)
 {
 	// Request blocks adjacent to the player
 	core::map<v3s16, bool> adjacent_blocks;
@@ -2021,7 +2022,7 @@ void Client::sendRequestForBlocks()
 	// Write the request
 	std::ostringstream os(std::ios_base::binary);
 	writeU16(os, TOSERVER_REQUEST_BLOCKS);
-	writeU16(os, 1000); // timeout
+	writeU16(os, timeout * 1000);
 	writeV3S16(os, req_min_pos);
 	writeV3S16(os, req_max_pos);
 	for (int x = req_min_pos.X; x <= req_max_pos.X; ++x) {

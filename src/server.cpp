@@ -391,6 +391,39 @@ void PlayerInfo::PrintLine(std::ostream *s)
 	(*s)<<std::endl;
 }
 
+void BlockSendQueue::send(Server &server, float packet_queue_max_seconds)
+{
+	core::list<QueuedBlockSend*>::Iterator i = m_queue.begin();
+	while(i != m_queue.end())
+	{
+		core::list<QueuedBlockSend*>::Iterator i_next = i;
+		i_next++;
+		QueuedBlockSend *q = *i;
+
+		if(m_timestamp >= q->timeout_timestamp){
+			delete q;
+			m_queue.erase(i);
+			i = i_next;
+			continue;
+		}
+		
+		float peer_packet_queue_seconds =
+				server.m_con.GetPeerOutgoingQueueSizeSeconds(q->peer_id);
+		if(peer_packet_queue_seconds < packet_queue_max_seconds){
+			MapBlock *block = server.m_env->getMap().getBlockNoCreateNoEx(q->pos);
+			if (block != NULL && !(block->isDummy()) && block->isValid() &&
+					block->isGenerated()){
+				RemoteClient *client = server.getClient(q->peer_id);
+				server.SendBlockNoLock(q->peer_id, block,
+						client->serialization_version);
+			}
+			delete q;
+			m_queue.erase(i);
+		}
+		i = i_next;
+	}
+}
+
 /*
 	Server
 */
@@ -759,6 +792,19 @@ void Server::AsyncRunStep()
 		handlePeerChanges();
 	}
 
+	/*
+		Send blocks to clients
+	*/
+	{
+		m_block_send_queue.step(dtime);
+
+		JMutexAutoLock lock(m_env_mutex);
+		JMutexAutoLock lock2(m_con_mutex);
+
+		m_block_send_queue.send(*this, dtime);
+		//m_block_send_queue.send(m_con, 100);
+	}
+	
 	/*
 		Update time of day and overall game time
 	*/
@@ -1793,13 +1839,15 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		std::istringstream is(datastring, std::ios_base::binary);
 		
 		int timeout_ms = readU16(is);
+		double timeout = (double)timeout_ms / 1000;
 		v3s16 pos_0 = readV3S16(is);
 		v3s16 pos_1 = readV3S16(is);
 		
-		dstream<<"pos_0: "<<PP(pos_0)<<", pos_1: "<<PP(pos_1)<<std::endl;
-		dstream<<"packet queue length: "<<m_con.GetPeerOutgoingQueueSize(peer_id)<<std::endl;
+		dstream<<"REQUEST_BLOCKS: "<<player->getName()<<": "
+				<<"pos: "<<PP(pos_0)<<"-"<<PP(pos_1)
+				<<", packet queue: "
+				<<m_con.GetPeerOutgoingQueueSize(peer_id)<<std::endl;
 		
-		RemoteClient *client = getClient(peer_id);
 		v3s16 p;
 		for(p.X = pos_0.X; p.X <= pos_1.X; ++p.X) {
 			for(p.Y = pos_0.Y; p.Y <= pos_1.Y; ++p.Y) {
@@ -1812,20 +1860,21 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 					if(client_change_counter == BLOCK_CHANGECOUNTER_UNDEFINED)
 						continue;
 					
-					// FIXME Limit # of blocks sent per request, prioritize closer blocks
+					// Calculate distance
+					v3f pf = intToFloat(p * MAP_BLOCKSIZE, BS);
+					pf += v3f(1,1,1) * MAP_BLOCKSIZE * BS / 2;
+					float d = (player->getPosition() - pf).getLength();
+
 					MapBlock *block = map.getBlockNoCreateNoEx(p);
 					if (block != NULL && !(block->isDummy()) && block->isValid() &&
 							block->isGenerated())
 					{
 						block->resetUsageTimer();
 						if (block->getChangeCounter() > client_change_counter) {
-							// TODO Should this be in a different thread?
-							SendBlockNoLock(peer_id, block, client->serialization_version);
+							float priority = -d;
+							m_block_send_queue.addBlock(peer_id, p, priority, timeout);
 						}
 					} else {
-						v3f pf = intToFloat(p * MAP_BLOCKSIZE, BS);
-						pf += v3f(1,1,1) * MAP_BLOCKSIZE * BS / 2;
-						float d = (player->getPosition() - pf).getLength();
 						float priority = -d;
 						m_emerge_queue.addBlock(p, priority);
 						m_emergethread.trigger();
