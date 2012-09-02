@@ -180,7 +180,8 @@ void * MeshUpdateThread::Thread()
 			sleep_ms(3);
 			continue;
 		}*/
-
+		
+		bool is_urgent = (m_queue_in.urgent_size() > 0);
 		QueuedMeshUpdate *q = m_queue_in.pop();
 		if(q == NULL)
 		{
@@ -204,8 +205,10 @@ void * MeshUpdateThread::Thread()
 		/*infostream<<"MeshUpdateThread: Processed "
 				<<"("<<q->p.X<<","<<q->p.Y<<","<<q->p.Z<<")"
 				<<std::endl;*/
-
-		m_queue_out.push_back(r);
+		if(is_urgent)
+			m_queue_out_urgent.push_back(r);
+		else
+			m_queue_out.push_back(r);
 
 		delete q;
 	}
@@ -260,7 +263,8 @@ Client::Client(
 	m_time_of_day_set(false),
 	m_last_time_of_day_f(-1),
 	m_time_of_day_update_timer(0),
-	m_removed_sounds_check_timer(0)
+	m_removed_sounds_check_timer(0),
+	m_dtime_avg(0.05)
 {
 	m_packetcounter_timer = 0.0;
 	//m_delete_unused_sectors_timer = 0.0;
@@ -339,6 +343,8 @@ void Client::step(float dtime)
 	// Limit a bit
 	if(dtime > 2.0)
 		dtime = 2.0;
+	
+	m_dtime_avg = m_dtime_avg * 0.98 + dtime * 0.2;
 	
 	if(m_ignore_damage_timer > dtime)
 		m_ignore_damage_timer -= dtime;
@@ -641,15 +647,15 @@ void Client::step(float dtime)
 				<<std::endl;*/
 		
 		int num_processed_meshes = 0;
-		// Spread out load between frames (drawing a new mesh causes huge
-		// frametime spikes on some GPUs)
-		int max_process_count = m_mesh_update_thread.m_queue_out.size()
-				* m_mesh_update_thread.m_queue_out.size() / 100 + 1;
-		while(m_mesh_update_thread.m_queue_out.size() > 0 &&
-				num_processed_meshes < max_process_count)
+		while(m_mesh_update_thread.m_queue_out_urgent.size() > 0 ||
+				m_mesh_update_thread.m_queue_out.size() > 0)
 		{
 			num_processed_meshes++;
-			MeshUpdateResult r = m_mesh_update_thread.m_queue_out.pop_front();
+			MeshUpdateResult r;
+			if(m_mesh_update_thread.m_queue_out_urgent.size() > 0)
+				r = m_mesh_update_thread.m_queue_out_urgent.pop_front();
+			else
+				r = m_mesh_update_thread.m_queue_out.pop_front();
 			MapBlock *block = m_env.getMap().getBlockNoCreateNoEx(r.p);
 			if(block)
 			{
@@ -669,6 +675,26 @@ void Client::step(float dtime)
 		}
 		if(num_processed_meshes > 0)
 			g_profiler->graphAdd("num_processed_meshes", num_processed_meshes);
+	}
+
+	/*
+		Handle pre-queued mesh updates
+	*/
+	{
+		int num_processed = 0;
+		float sqrt_norm = 0.030;
+		int max_norm = 100;
+		int max_per_frame = sqrt(m_dtime_avg/sqrt_norm) * sqrt_norm * max_norm + 1;
+		while(m_update_mesh_task_pre_queue.size() > 0 &&
+				num_processed < max_per_frame)
+		{
+			num_processed++;
+			PreQueuedMeshUpdate pq = m_update_mesh_task_pre_queue.pop_front();
+			if(pq.with_edge)
+				addUpdateMeshTaskWithEdge(pq.p, pq.urgent);
+			else
+				addUpdateMeshTask(pq.p, pq.urgent);
+		}
 	}
 
 	/*
@@ -1050,31 +1076,27 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 
 		if(block)
 		{
-			/*
-				Update an existing block
-			*/
-
+			// Update an existing block
 			//infostream<<"Updating"<<std::endl;
 			block->deSerialize(is, ser_version, false);
 			block->setChangeCounter(change_counter);
 		}
 		else
 		{
-			/*
-				Create a new block
-			*/
+			// Create a new block
 			//infostream<<"Creating new"<<std::endl;
 			block = new MapBlock(&m_env.getMap(), p, this);
 			block->deSerialize(is, ser_version, false);
 			block->setChangeCounter(change_counter);
 			sector->insertBlock(block);
 		}
-
-		/*
-			Add it to mesh update queue and set it to be acknowledged after update.
-		*/
-		//infostream<<"Adding mesh update task for received block"<<std::endl;
-		addUpdateMeshTaskWithEdge(p, true);
+		
+		// Pre-queue the addition of the task, to spread processing between frames
+		PreQueuedMeshUpdate pq;
+		pq.p = p;
+		pq.urgent = false;
+		pq.with_edge = true;
+		m_update_mesh_task_pre_queue.push_back(pq);
 	}
 	else if(command == TOCLIENT_INVENTORY)
 	{
@@ -1967,8 +1989,7 @@ void Client::sendRequestForBlocks()
 	for (int m = 0; m < 2; ++m)
 	{
 		// If mesh generation is fully booked, skip other than adjacent blocks
-		if(m == 1 && (m_mesh_update_thread.m_queue_in.size() >= 15 ||
-				m_mesh_update_thread.m_queue_out.size() >= 15))
+		if(m == 1 && m_update_mesh_task_pre_queue.size() > 0)
 			continue;
 
 		core::map<v3s16, bool>* map =
@@ -2319,7 +2340,10 @@ void Client::addUpdateMeshTask(v3s16 p, bool urgent)
 		//TimeTaker timer("data fill");
 		// Release: ~0ms
 		// Debug: 1-6ms, avg=2ms
-		data->fill(b);
+		{
+			ScopeProfiler sp(g_profiler, "Client: data->fill", SPT_AVG);
+			data->fill(b);
+		}
 		data->setCrack(m_crack_level, m_crack_pos);
 		data->setSmoothLighting(g_settings->getBool("smooth_lighting"));
 	}

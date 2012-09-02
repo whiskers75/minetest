@@ -54,6 +54,19 @@ public:
 	{}
 };
 
+struct PreQueuedMeshUpdate
+{
+	v3s16 p;
+	bool urgent;
+	bool with_edge;
+
+	PreQueuedMeshUpdate():
+		p(0,0,0),
+		urgent(false),
+		with_edge(true)
+	{}
+};
+
 struct QueuedMeshUpdate
 {
 	v3s16 p;
@@ -87,6 +100,12 @@ public:
 		JMutexAutoLock lock(m_mutex);
 		return m_queue.size();
 	}
+
+	u32 urgent_size()
+	{
+		JMutexAutoLock lock(m_mutex);
+		return m_urgents.size();
+	}
 	
 private:
 	std::vector<QueuedMeshUpdate*> m_queue;
@@ -119,6 +138,7 @@ public:
 
 	MeshUpdateQueue m_queue_in;
 
+	MutexedQueue<MeshUpdateResult> m_queue_out_urgent;
 	MutexedQueue<MeshUpdateResult> m_queue_out;
 
 	IGameDef *m_gamedef;
@@ -396,6 +416,11 @@ private:
 	// Detached inventories
 	// key = name
 	std::map<std::string, Inventory*> m_detached_inventories;
+
+	// Pre-queue of mesh updates for balancing load between frames
+	Queue<PreQueuedMeshUpdate> m_update_mesh_task_pre_queue;
+
+	float m_dtime_avg;
 };
 
 #endif // !CLIENT_HEADER
