@@ -800,9 +800,9 @@ void Server::AsyncRunStep()
 
 		JMutexAutoLock lock(m_env_mutex);
 		JMutexAutoLock lock2(m_con_mutex);
-
-		m_block_send_queue.send(*this, dtime);
-		//m_block_send_queue.send(m_con, 100);
+		
+		// Send stuff enough to fill the outgoing buffer half of the time
+		m_block_send_queue.send(*this, dtime * 0.5);
 	}
 	
 	/*
@@ -1871,6 +1871,10 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 					{
 						block->resetUsageTimer();
 						if (block->getChangeCounter() > client_change_counter) {
+							/*infostream<<"Server: Client's version of "<<PP(p)
+									<<" is "<<client_change_counter<<", "
+									<<"server's version is "<<block->getChangeCounter()
+									<<std::endl;*/
 							float priority = -d;
 							m_block_send_queue.addBlock(peer_id, p, priority, timeout);
 						}
@@ -3393,7 +3397,8 @@ void Server::SendBlockNoLock(u16 peer_id, MapBlock *block, u8 ver)
 	g_profiler->add("Server: blocks sent", 1);
 
 	/*infostream<<"Server: Sending block ("<<p.X<<","<<p.Y<<","<<p.Z<<")"
-			<<":  \tpacket size: "<<replysize<<std::endl;*/
+			<<":  \tpacket size: "<<replysize
+			<<", content: "<<analyze_block(block)<<std::endl;*/
 	
 	/*
 		Send packet

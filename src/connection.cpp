@@ -480,13 +480,13 @@ void Peer::reportRTT(float rtt)
 		if(rtt < 0.01){
 			if(m_max_packets_per_second < 400)
 				m_max_packets_per_second += 10;
-		} else if(rtt < 0.2){
+		} else if(rtt < 0.3){
 			if(m_max_packets_per_second < 100)
 				m_max_packets_per_second += 2;
 		} else {
 			m_max_packets_per_second *= 0.8;
-			if(m_max_packets_per_second < 10)
-				m_max_packets_per_second = 10;
+			if(m_max_packets_per_second < 20)
+				m_max_packets_per_second = 20;
 		}
 	}
 

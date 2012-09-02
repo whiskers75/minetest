@@ -42,6 +42,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/string.h"
 #include "hex.h"
 
+#define PP(x) "("<<(x).X<<","<<(x).Y<<","<<(x).Z<<")"
+
 static std::string getMediaCacheDir()
 {
 	return porting::path_user + DIR_DELIM + "cache" + DIR_DELIM + "media";
@@ -614,7 +616,8 @@ void Client::step(float dtime)
 		float interval = 0.5;
 		float &counter = m_request_blocks_timer;
 		counter += dtime;
-		if (counter >= interval)
+		if (counter >= interval &&
+				m_con.GetPeerOutgoingQueueSizeSeconds(PEER_ID_SERVER) < interval)
 		{
 			counter = 0.0;
 			sendRequestForBlocks(interval);
@@ -1062,6 +1065,9 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 		if (block && block->getChangeCounter() >= change_counter) {
 			// We already have a newer version of this block
 			// Don't need to bother deserializing
+			/*infostream<<"Client: TOCLIENT_BLOCKDATA: Already have "
+					<<PP(p)<<" rev. "<<block->getChangeCounter()
+					<<", server sent rev. "<<change_counter<<std::endl;*/
 			return;
 		}
 		
@@ -1091,6 +1097,9 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 			block->setChangeCounter(change_counter);
 			sector->insertBlock(block);
 		}
+
+		/*infostream<<"Client: TOCLIENT_BLOCKDATA: "
+				<<analyze_block(block)<<std::endl;*/
 		
 		// Pre-queue the addition of the task, to spread processing between frames
 		PreQueuedMeshUpdate pq;
@@ -1986,7 +1995,7 @@ void Client::sendRequestForBlocks(float timeout)
 	// Find the coordinate range and change counters of requested blocks
 	bool first_block = true;
 	v3s16 req_min_pos, req_max_pos;
-	core::map<v3s16, u32> request_block_ccs;
+	core::map<v3s16, bool> request_blocks; // Value is dummy
 	for (int m = 0; m < 2; ++m)
 	{
 		// If mesh generation is fully booked, skip other than adjacent blocks
@@ -2012,10 +2021,7 @@ void Client::sendRequestForBlocks(float timeout)
 				if (bpos.Z > req_max_pos.Z) req_max_pos.Z = bpos.Z;
 			}
 
-			MapBlock* b = m_env.getMap().getBlockNoCreateNoEx(bpos);
-			u32 cc = 0; // Request any by default (allocated blocks start at 1)
-			if (b != NULL) cc = b->getChangeCounter();
-			request_block_ccs.set(bpos, cc);
+			request_blocks.set(bpos, true);
 		}
 	}
 
@@ -2029,11 +2035,13 @@ void Client::sendRequestForBlocks(float timeout)
 		for (int y = req_min_pos.Y; y <= req_max_pos.Y; ++y) {
 			for (int z = req_min_pos.Z; z <= req_max_pos.Z; ++z) {
 				v3s16 bpos = v3s16(x,y,z);
-				u32 cc = BLOCK_CHANGECOUNTER_UNDEFINED; // Unrequested block
-				core::map<v3s16, u32>::Iterator bi = request_block_ccs.find(bpos);
-				if (bi.getNode()) {
-					cc = bi->getValue();
+				u32 cc = BLOCK_CHANGECOUNTER_UNDEFINED; // Don't request
+				if(request_blocks.find(bpos)){
+					MapBlock* b = m_env.getMap().getBlockNoCreateNoEx(bpos);
+					cc = 0; // Request any version unless block exists
+					if (b != NULL) cc = b->getChangeCounter();
 				}
+				//infostream<<"Client: version of "<<PP(bpos)<<" is "<<cc<<std::endl;
 				writeU32(os, cc);
 			}
 		}
