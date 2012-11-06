@@ -88,9 +88,29 @@ public:
 	void Bind(unsigned short port);
 	//void Close();
 	//bool IsOpen();
-	void Send(const Address & destination, const void * data, int size);
+	void Send(const Address &destination, const void *data, int size);
 	// Returns -1 if there is no data
-	int Receive(Address & sender, void * data, int size);
+	int Receive(Address &sender, void *data, int size);
+	int GetHandle(); // For debugging purposes only
+	void setTimeoutMs(int timeout_ms);
+	// Returns true if there is data, false if timeout occurred
+	bool WaitData(int timeout_ms);
+private:
+	int m_handle;
+	int m_timeout_ms;
+};
+
+class TCPSocket
+{
+public:
+	TCPSocket();
+	~TCPSocket();
+	void Bind(unsigned short port);
+	bool Connect(const Address &destination);
+	void Send(const void *data, int size);
+	// Returns -1 if there is no data
+	int Receive(void *data, int size);
+	TCPSocket* Accept();
 	int GetHandle(); // For debugging purposes only
 	void setTimeoutMs(int timeout_ms);
 	// Returns true if there is data, false if timeout occurred
