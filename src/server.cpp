@@ -406,7 +406,8 @@ void BlockSendQueue::send(Server &server, float packet_queue_max_seconds)
 			i = i_next;
 			continue;
 		}
-		
+
+		// FIXME: GetPeerOutgoingQueueSizeSeconds does not work for TCP
 		float peer_packet_queue_seconds =
 				server.m_con.GetPeerOutgoingQueueSizeSeconds(q->peer_id);
 		if(peer_packet_queue_seconds < packet_queue_max_seconds){
