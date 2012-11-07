@@ -967,7 +967,7 @@ void ConnectionThread::receive()
 			s32 received_size = socket->Receive(ba, 10000);
 			if(received_size <= 0)
 				break;
-			dstream<<getDesc()<<"Streamed "<<received_size
+			dout_con<<getDesc()<<"Streamed "<<received_size
 					<<" bytes from TCP"<<std::endl;
 			SharedBuffer<u8> b(ba, received_size);
 			sbuf.push(b);
@@ -984,7 +984,7 @@ void ConnectionThread::receive()
 				break;
 			sbuf.pop(4);
 			SharedBuffer<u8> data = sbuf.pop(size);
-			dstream<<getDesc()<<"Received "<<data.getSize()
+			dout_con<<getDesc()<<"Received "<<data.getSize()
 					<<" bytes through TCP"<<std::endl;
 			ConnectionEvent e;
 			e.dataReceived(peer_id, data);
@@ -1211,9 +1211,7 @@ void ConnectionThread::send(u16 peer_id, u8 channelnum,
 				m_peer_tcps.find(peer_id);
 		if(it != m_peer_tcps.end()){
 			SharedPtr<TCPSocket> &socket = it->second;
-			/*dout_con<<getDesc()<<"Sending "<<data.getSize()
-					<<" bytes through TCP"<<std::endl;*/
-			dstream<<getDesc()<<"Sending "<<data.getSize()
+			dout_con<<getDesc()<<"Sending "<<data.getSize()
 					<<" bytes through TCP"<<std::endl;
 			u8 init_buf[4];
 			writeU32(&init_buf[0], data.getSize());
