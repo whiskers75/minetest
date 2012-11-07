@@ -1218,7 +1218,7 @@ void ConnectionThread::send(u16 peer_id, u8 channelnum,
 				m_peer_tcps.find(peer_id);
 		if(it != m_peer_tcps.end()){
 			SharedPtr<TCPSocket> &socket = it->second;
-			dout_con<<getDesc()<<"Sending "<<data.getSize()
+			dout_con<<getDesc()<<" Sending "<<data.getSize()
 					<<" bytes through TCP"<<std::endl;
 			SharedBuffer<u8> b(data.getSize()+4);
 			writeU32(&b[0], data.getSize());
@@ -1228,6 +1228,7 @@ void ConnectionThread::send(u16 peer_id, u8 channelnum,
 		}
 	} catch(SendFailedException &e){
 		// Use UDP instead
+		derr_con<<getDesc()<<" TCP failed; trying UDP instead"<<std::endl;
 	}
 
 	Channel *channel = &(peer->channels[channelnum]);
