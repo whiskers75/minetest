@@ -1837,7 +1837,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		v3s16 pos_0 = readV3S16(is);
 		v3s16 pos_1 = readV3S16(is);
 		
-		dstream<<"REQUEST_BLOCKS: "<<player->getName()<<": "
+		verbosestream<<"REQUEST_BLOCKS: "<<player->getName()<<": "
 				<<"pos: "<<PP(pos_0)<<"-"<<PP(pos_1)
 				<<", packet queue: "
 				<<m_con.GetPeerOutgoingQueueSize(peer_id)<<std::endl;
