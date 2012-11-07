@@ -475,10 +475,17 @@ void TCPSocket::Send(const void *data, int size)
 {
 	int sent = send(m_handle, (const char*)data, size, 0);
 
-    if(sent != size)
-    {
-		throw SendFailedException("Failed to send data");
-    }
+	if(sent < 0)
+	{
+#ifndef DISABLE_ERRNO
+		dstream<<(int)m_handle<<": send failed (tcp): "<<strerror(errno)<<std::endl;
+#endif
+		throw SendFailedException("Failed to send data (error)");
+	}
+	else if(sent != size)
+	{
+		throw SendFailedException("Failed to send data (all not sent)");
+	}
 }
 
 int TCPSocket::Receive(void *data, int size)
