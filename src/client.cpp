@@ -1474,6 +1474,12 @@ void Client::ProcessData(u8 *data, u32 datasize, u16 sender_peer_id)
 		event.type = CE_TEXTURES_UPDATED;
 		m_client_event_queue.push_back(event);
 
+		if(file_requests.empty()){
+			m_media_received = true;
+			m_media_receive_progress = 1.0;
+			return;
+		}
+
 		/*
 			u16 command
 			u16 number of files requested
