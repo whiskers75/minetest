@@ -1752,6 +1752,19 @@ float ConnectionThread::GetPeerAvgRTT(u16 peer_id)
 	return getPeer(peer_id)->avg_rtt;
 }
 
+u32 ConnectionThread::GetPeerOutgoingQueueSize(u16 peer_id)
+{
+	JMutexAutoLock peerlock(m_peers_mutex);
+	return getPeer(peer_id)->m_num_queued;
+}
+
+float ConnectionThread::GetPeerOutgoingQueueSizeSeconds(u16 peer_id)
+{
+	JMutexAutoLock peerlock(m_peers_mutex);
+	Peer *peer = getPeer(peer_id);
+	return (float)peer->m_num_queued / peer->m_max_packets_per_second;
+}
+
 void ConnectionThread::PrintInfo(std::ostream &out)
 {
 	out<<getDesc()<<": ";
@@ -1862,19 +1875,6 @@ u16 Connection::GetPeerID()
 	return m_thread.GetPeerID();
 }
 
-u32 Connection::GetPeerOutgoingQueueSize(u16 peer_id)
-{
-	JMutexAutoLock peerlock(m_peers_mutex);
-	return getPeer(peer_id)->m_num_queued;
-}
-
-float Connection::GetPeerOutgoingQueueSizeSeconds(u16 peer_id)
-{
-	JMutexAutoLock peerlock(m_peers_mutex);
-	Peer *peer = getPeer(peer_id);
-	return (float)peer->m_num_queued / peer->m_max_packets_per_second;
-}
-
 Address Connection::GetPeerAddress(u16 peer_id)
 {
 	return m_thread.GetPeerAddress(peer_id);
@@ -1883,6 +1883,16 @@ Address Connection::GetPeerAddress(u16 peer_id)
 float Connection::GetPeerAvgRTT(u16 peer_id)
 {
 	return m_thread.GetPeerAvgRTT(peer_id);
+}
+
+u32 Connection::GetPeerOutgoingQueueSize(u16 peer_id)
+{
+	return m_thread.GetPeerOutgoingQueueSize(peer_id);
+}
+
+float Connection::GetPeerOutgoingQueueSizeSeconds(u16 peer_id)
+{
+	return m_thread.GetPeerOutgoingQueueSizeSeconds(peer_id);
 }
 
 u32 Connection::Receive(u16 &peer_id, SharedBuffer<u8> &data)

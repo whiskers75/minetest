@@ -685,6 +685,8 @@ public:
 	u16 GetPeerID();
 	Address GetPeerAddress(u16 peer_id);
 	float GetPeerAvgRTT(u16 peer_id);
+	u32 GetPeerOutgoingQueueSize(u16 peer_id);
+	float GetPeerOutgoingQueueSizeSeconds(u16 peer_id);
 
 	// Backwards compatibility
 	u32 Receive(u16 &peer_id, SharedBuffer<u8> &data);

@@ -216,11 +216,21 @@ void ClientMap::updateDrawList(video::IVideoDriver* driver)
 	// Blocks from which stuff was actually drawn
 	//u32 blocks_without_stuff = 0;
 
-	for(core::map<v2s16, MapSector*>::Iterator
-			si = m_sectors.getIterator();
-			si.atEnd() == false; si++)
+	std::vector<MapSector*> drawable_sectors;
+	drawable_sectors.reserve(
+		(p_blocks_max.X-p_blocks_min.X+1)*
+		(p_blocks_max.Z-p_blocks_min.Z+1)
+	);
+	for(int sx = p_blocks_min.X; sx <= p_blocks_max.X; ++sx){
+		for(int sy = p_blocks_min.Z; sy <= p_blocks_max.Z; ++sy){
+			drawable_sectors.push_back(emergeSector(v2s16(sx,sy)));
+		}
+	}
+
+	for(std::vector<MapSector*>::iterator si = drawable_sectors.begin();
+			si != drawable_sectors.end(); ++si)
 	{
-		MapSector *sector = si.getNode()->getValue();
+		MapSector *sector = *si;
 		v2s16 sp = sector->getPos();
 		
 		if(m_control.range_all == false)
@@ -241,10 +251,9 @@ void ClientMap::updateDrawList(video::IVideoDriver* driver)
 
 		u32 sector_blocks_drawn = 0;
 		
-		core::list< MapBlock * >::Iterator i;
-		for(i=sectorblocks.begin(); i!=sectorblocks.end(); i++)
+		for(int by = p_blocks_min.Y; by <= p_blocks_max.Y; ++by)
 		{
-			MapBlock *block = *i;
+			v3s16 bp(sp.X, by, sp.Y);
 
 			/*
 				Compare block position to camera position, skip
@@ -256,7 +265,7 @@ void ClientMap::updateDrawList(video::IVideoDriver* driver)
 				range = m_control.wanted_range * BS;
 
 			float d = 0.0;
-			if(isBlockInSight(block->getPos(), camera_position,
+			if(isBlockInSight(bp, camera_position,
 					camera_direction, camera_fov,
 					range, &d) == false)
 			{
@@ -271,18 +280,6 @@ void ClientMap::updateDrawList(video::IVideoDriver* driver)
 			blocks_in_range++;
 			
 			/*
-				Ignore if mesh doesn't exist
-			*/
-			{
-				//JMutexAutoLock lock(block->mesh_mutex);
-
-				if(block->mesh == NULL){
-					blocks_in_range_without_mesh++;
-					continue;
-				}
-			}
-
-			/*
 				Occlusion culling
 			*/
 
@@ -296,7 +293,7 @@ void ClientMap::updateDrawList(video::IVideoDriver* driver)
 					occlusion_culling_enabled = false;
 			}
 
-			v3s16 cpn = block->getPos() * MAP_BLOCKSIZE;
+			v3s16 cpn = bp * MAP_BLOCKSIZE;
 			cpn += v3s16(MAP_BLOCKSIZE/2, MAP_BLOCKSIZE/2, MAP_BLOCKSIZE/2);
 			float step = BS*1;
 			float stepfac = 1.1;
@@ -370,7 +367,7 @@ void ClientMap::updateDrawList(video::IVideoDriver* driver)
 
 			// Add to set
 			block->refGrab();
-			m_drawlist[block->getPos()] = block;
+			m_drawlist[bp] = block;
 
 			sector_blocks_drawn++;
 			blocks_drawn++;
