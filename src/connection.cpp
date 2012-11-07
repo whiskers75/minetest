@@ -1206,19 +1206,21 @@ void ConnectionThread::send(u16 peer_id, u8 channelnum,
 		return;
 
 	// Attempt to send via TCP if reliable is requested
-	if(reliable){
+	if(reliable) try{
 		std::map<u16, SharedPtr<TCPSocket> >::iterator it =
 				m_peer_tcps.find(peer_id);
 		if(it != m_peer_tcps.end()){
 			SharedPtr<TCPSocket> &socket = it->second;
 			dout_con<<getDesc()<<"Sending "<<data.getSize()
 					<<" bytes through TCP"<<std::endl;
-			u8 init_buf[4];
-			writeU32(&init_buf[0], data.getSize());
-			socket->Send(init_buf, 4);
-			socket->Send(&data[0], data.getSize());
+			SharedBuffer<u8> b(data.getSize()+4);
+			writeU32(&b[0], data.getSize());
+			memcpy(&b[4], &data[0], data.getSize());
+			socket->Send(&b[0], b.getSize());
 			return;
 		}
+	} catch(SendFailedException &e){
+		// Use UDP instead
 	}
 
 	Channel *channel = &(peer->channels[channelnum]);
