@@ -67,11 +67,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 		TOCLIENT_DETACHED_INVENTORY
 	PROTOCOL_VERSION 13:
 		InventoryList field "Width" (deserialization fails with old versions)
-		Versioned block data
+	PROTOCOL_VERSION 14:
 		TOSERVER_REQUEST_BLOCKS
+		Versioned block data
 */
 
-#define PROTOCOL_VERSION 13
+#define PROTOCOL_VERSION 14
 
 #define PROTOCOL_ID 0x4f457403
 
