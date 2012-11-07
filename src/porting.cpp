@@ -72,9 +72,15 @@ void sigint_handler(int sig)
 	}
 }
 
+void sigpipe_handler(int sig)
+{
+	// Ignore
+}
+
 void signal_handler_init(void)
 {
 	(void)signal(SIGINT, sigint_handler);
+	(void)signal(SIGPIPE, sigpipe_handler);
 }
 
 #else // _WIN32
