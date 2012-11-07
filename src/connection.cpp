@@ -466,7 +466,8 @@ Peer::Peer(u16 a_id, Address a_address):
 	m_sendtime_accu(0),
 	m_max_packets_per_second(10),
 	m_num_sent(0),
-	m_max_num_sent(0)
+	m_max_num_sent(0),
+	m_num_queued(0)
 {
 }
 Peer::~Peer()
@@ -479,13 +480,13 @@ void Peer::reportRTT(float rtt)
 		if(rtt < 0.01){
 			if(m_max_packets_per_second < 400)
 				m_max_packets_per_second += 10;
-		} else if(rtt < 0.2){
+		} else if(rtt < 0.3){
 			if(m_max_packets_per_second < 100)
 				m_max_packets_per_second += 2;
 		} else {
 			m_max_packets_per_second *= 0.8;
-			if(m_max_packets_per_second < 10)
-				m_max_packets_per_second = 10;
+			if(m_max_packets_per_second < 20)
+				m_max_packets_per_second = 20;
 		}
 	}
 
@@ -636,6 +637,7 @@ void ConnectionThread::send(float dtime)
 		peer->m_num_sent = 0;
 		peer->m_max_num_sent = peer->m_sendtime_accu *
 				peer->m_max_packets_per_second;
+		peer->m_num_queued = 0;
 	}
 	Queue<OutgoingPacket> postponed_packets;
 	while(m_outgoing_queue.size() != 0){
@@ -651,6 +653,7 @@ void ConnectionThread::send(float dtime)
 			peer->m_num_sent++;
 		} else {
 			postponed_packets.push_back(packet);
+			peer->m_num_queued++;
 		}
 	}
 	while(postponed_packets.size() != 0){
@@ -1857,6 +1860,19 @@ bool Connection::Connected()
 u16 Connection::GetPeerID()
 {
 	return m_thread.GetPeerID();
+}
+
+u32 Connection::GetPeerOutgoingQueueSize(u16 peer_id)
+{
+	JMutexAutoLock peerlock(m_peers_mutex);
+	return getPeer(peer_id)->m_num_queued;
+}
+
+float Connection::GetPeerOutgoingQueueSizeSeconds(u16 peer_id)
+{
+	JMutexAutoLock peerlock(m_peers_mutex);
+	Peer *peer = getPeer(peer_id);
+	return (float)peer->m_num_queued / peer->m_max_packets_per_second;
 }
 
 Address Connection::GetPeerAddress(u16 peer_id)

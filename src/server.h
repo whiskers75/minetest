@@ -77,8 +77,7 @@ v3f findSpawnPos(ServerMap &map);
 struct QueuedBlockEmerge
 {
 	v3s16 pos;
-	// key = peer_id, value = flags
-	core::map<u16, u8> peer_ids;
+	float priority; // Larger = more important; 0 = highest
 };
 
 /*
@@ -104,41 +103,49 @@ public:
 		}
 	}
 	
-	/*
-		peer_id=0 adds with nobody to send to
-	*/
-	void addBlock(u16 peer_id, v3s16 pos, u8 flags)
+	void addBlock(v3s16 pos, float priority)
 	{
 		DSTACK(__FUNCTION_NAME);
 	
 		JMutexAutoLock lock(m_mutex);
-
-		if(peer_id != 0)
+		
+		// Remove from queue if it's not already queued
+		for(core::list<QueuedBlockEmerge*>::Iterator
+				i=m_queue.begin(); i!=m_queue.end(); i++)
 		{
-			/*
-				Find if block is already in queue.
-				If it is, update the peer to it and quit.
-			*/
-			core::list<QueuedBlockEmerge*>::Iterator i;
-			for(i=m_queue.begin(); i!=m_queue.end(); i++)
+			QueuedBlockEmerge *q = *i;
+			if(q->pos == pos){
+				if(q->priority > priority){
+					// Already in queue with a higher priority
+					return;
+				} else{
+					// In queue with a lower priority; remove and re-add
+					delete q;
+					m_queue.erase(i);
+					break;
+				}
+			}
+		}
+	
+		// Add to queue
+
+		QueuedBlockEmerge *newq = new QueuedBlockEmerge;
+		newq->pos = pos;
+		newq->priority = priority;
+
+		if(m_queue.empty()){
+			m_queue.push_back(newq);
+		} else {
+			for(core::list<QueuedBlockEmerge*>::Iterator
+					i=m_queue.begin(); i!=m_queue.end(); i++)
 			{
 				QueuedBlockEmerge *q = *i;
-				if(q->pos == pos)
-				{
-					q->peer_ids[peer_id] = flags;
+				if(q->priority < priority){
+					m_queue.insert_before(i, newq);
 					return;
 				}
 			}
 		}
-		
-		/*
-			Add the block
-		*/
-		QueuedBlockEmerge *q = new QueuedBlockEmerge;
-		q->pos = pos;
-		if(peer_id != 0)
-			q->peer_ids[peer_id] = flags;
-		m_queue.push_back(q);
 	}
 
 	// Returned pointer must be deleted
@@ -161,24 +168,8 @@ public:
 		return m_queue.size();
 	}
 	
-	u32 peerItemCount(u16 peer_id)
-	{
-		JMutexAutoLock lock(m_mutex);
-
-		u32 count = 0;
-
-		core::list<QueuedBlockEmerge*>::Iterator i;
-		for(i=m_queue.begin(); i!=m_queue.end(); i++)
-		{
-			QueuedBlockEmerge *q = *i;
-			if(q->peer_ids.find(peer_id) != NULL)
-				count++;
-		}
-
-		return count;
-	}
-
 private:
+	// Sorted by priority; highest first
 	core::list<QueuedBlockEmerge*> m_queue;
 	JMutex m_mutex;
 };
@@ -313,6 +304,103 @@ struct ServerPlayingSound
 	std::set<u16> clients; // peer ids
 };
 
+struct QueuedBlockSend
+{
+	int peer_id;
+	v3s16 pos;
+	float priority; // Larger = more important; 0 = highest
+	double timeout_timestamp;
+
+	QueuedBlockSend():
+		peer_id(0),
+		pos(0,0,0),
+		priority(0),
+		timeout_timestamp(0)
+	{}
+};
+
+class BlockSendQueue
+{
+public:
+	BlockSendQueue()
+	{
+	}
+
+	~BlockSendQueue()
+	{
+		core::list<QueuedBlockSend*>::Iterator i;
+		for(i=m_queue.begin(); i!=m_queue.end(); i++)
+		{
+			QueuedBlockSend *q = *i;
+			delete q;
+		}
+	}
+	
+	void addBlock(int peer_id, v3s16 pos, float priority, float timeout)
+	{
+		float timeout_timestamp = m_timestamp + timeout;
+	
+		// Remove from queue if it's not already queued
+		for(core::list<QueuedBlockSend*>::Iterator
+				i=m_queue.begin(); i!=m_queue.end(); i++)
+		{
+			QueuedBlockSend *q = *i;
+			if(q->peer_id == peer_id && q->pos == pos){
+				if(q->priority > priority && q->timeout_timestamp > timeout_timestamp){
+					// Already in queue with a higher priority and higher timoeut
+					return;
+				} else{
+					// In queue with a lower priority; remove and re-add
+					delete q;
+					m_queue.erase(i);
+					break;
+				}
+			}
+		}
+	
+		// Add to queue
+
+		QueuedBlockSend *newq = new QueuedBlockSend;
+		newq->peer_id = peer_id;
+		newq->pos = pos;
+		newq->priority = priority;
+		newq->timeout_timestamp = timeout_timestamp;
+
+		if(m_queue.empty()){
+			m_queue.push_back(newq);
+		} else {
+			for(core::list<QueuedBlockSend*>::Iterator
+					i=m_queue.begin(); i!=m_queue.end(); i++)
+			{
+				QueuedBlockSend *q = *i;
+				if(q->priority < priority){
+					m_queue.insert_before(i, newq);
+					return;
+				}
+			}
+		}
+	}
+
+	void step(double dtime)
+	{
+		m_timestamp += dtime;
+	}
+
+	u32 size()
+	{
+		return m_queue.size();
+	}
+	
+	// FIXME: This shouldn't require the server at all; the data should be fed
+	// in addBlock and only the connection should be needed here
+	void send(Server &server, float packet_queue_max_seconds);
+
+private:
+	// Sorted by priority; highest first
+	core::list<QueuedBlockSend*> m_queue;
+	double m_timestamp;
+};
+
 class RemoteClient
 {
 public:
@@ -331,8 +419,7 @@ public:
 	bool definitions_sent;
 
 	RemoteClient():
-		m_time_from_building(9999),
-		m_excess_gotblocks(0)
+		m_time_from_building(9999)
 	{
 		peer_id = 0;
 		serialization_version = SER_FMT_VER_INVALID;
@@ -348,26 +435,6 @@ public:
 	{
 	}
 	
-	/*
-		Finds block that should be sent next to the client.
-		Environment should be locked when this is called.
-		dtime is used for resetting send radius at slow interval
-	*/
-	void GetNextBlocks(Server *server, float dtime,
-			core::array<PrioritySortedBlockTransfer> &dest);
-
-	void GotBlock(v3s16 p);
-
-	void SentBlock(v3s16 p);
-
-	void SetBlockNotSent(v3s16 p);
-	void SetBlocksNotSent(core::map<v3s16, MapBlock*> &blocks);
-
-	s32 SendingCount()
-	{
-		return m_blocks_sending.size();
-	}
-	
 	// Increments timeouts and removes timed-out blocks from list
 	// NOTE: This doesn't fix the server-not-sending-block bug
 	//       because it is related to emerging, not sending.
@@ -376,12 +443,8 @@ public:
 	void PrintInfo(std::ostream &o)
 	{
 		o<<"RemoteClient "<<peer_id<<": "
-				<<"m_blocks_sent.size()="<<m_blocks_sent.size()
-				<<", m_blocks_sending.size()="<<m_blocks_sending.size()
 				<<", m_nearest_unsent_d="<<m_nearest_unsent_d
-				<<", m_excess_gotblocks="<<m_excess_gotblocks
 				<<std::endl;
-		m_excess_gotblocks = 0;
 	}
 
 	// Time from last placing or removing blocks
@@ -414,33 +477,13 @@ private:
 	v3s16 m_last_center;
 	float m_nearest_unsent_reset_timer;
 	
-	/*
-		Blocks that are currently on the line.
-		This is used for throttling the sending of blocks.
-		- The size of this list is limited to some value
-		Block is added when it is sent with BLOCKDATA.
-		Block is removed when GOTBLOCKS is received.
-		Value is time from sending. (not used at the moment)
-	*/
-	core::map<v3s16, float> m_blocks_sending;
-
-	/*
-		Count of excess GotBlocks().
-		There is an excess amount because the client sometimes
-		gets a block so late that the server sends it again,
-		and the client then sends two GOTBLOCKs.
-		This is resetted by PrintInfo()
-	*/
-	u32 m_excess_gotblocks;
-	
 	// CPU usage optimization
 	u32 m_nothing_to_send_counter;
 	float m_nothing_to_send_pause_timer;
 };
 
 class Server : public con::PeerHandler, public MapEventReceiver,
-		public InventoryManager, public IGameDef,
-		public IBackgroundBlockEmerger
+		public InventoryManager, public IGameDef
 {
 public:
 	/*
@@ -539,8 +582,6 @@ public:
 	void notifyPlayer(const char *name, const std::wstring msg);
 	void notifyPlayers(const std::wstring msg);
 
-	void queueBlockEmerge(v3s16 blockpos, bool allow_generate);
-	
 	// Creates or resets inventory
 	Inventory* createDetachedInventory(const std::string &name);
 	
@@ -625,17 +666,11 @@ private:
 		far_d_nodes are ignored and their peer_ids are added to far_players
 	*/
 	// Envlock and conlock should be locked when calling these
-	void sendRemoveNode(v3s16 p, u16 ignore_id=0,
-			core::list<u16> *far_players=NULL, float far_d_nodes=100);
-	void sendAddNode(v3s16 p, MapNode n, u16 ignore_id=0,
-			core::list<u16> *far_players=NULL, float far_d_nodes=100);
-	void setBlockNotSent(v3s16 p);
+	void sendRemoveNode(v3s16 p, u16 ignore_id=0, float far_d_nodes=100);
+	void sendAddNode(v3s16 p, MapNode n, u16 ignore_id=0, float far_d_nodes=100);
 	
 	// Environment and Connection must be locked when called
 	void SendBlockNoLock(u16 peer_id, MapBlock *block, u8 ver);
-	
-	// Sends blocks to clients (locks env and con on its own)
-	void SendBlocks(float dtime);
 	
 	void fillMediaCache();
 	void sendMediaAnnouncement(u16 peer_id);
@@ -843,6 +878,7 @@ private:
 
 	friend class EmergeThread;
 	friend class RemoteClient;
+	friend class BlockSendQueue;
 
 	std::map<std::string,MediaInfo> m_media;
 
@@ -857,6 +893,9 @@ private:
 	*/
 	// key = name
 	std::map<std::string, Inventory*> m_detached_inventories;
+
+	/* Block send queue */
+	BlockSendQueue m_block_send_queue;
 };
 
 /*

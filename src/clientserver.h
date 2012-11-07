@@ -49,7 +49,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 		Many things
 	PROTOCOL_VERSION 9:
 		ContentFeatures and NodeDefManager use a different serialization
-		    format; better for future version cross-compatibility
+			format; better for future version cross-compatibility
 		Many things
 	PROTOCOL_VERSION 10:
 		TOCLIENT_PRIVILEGES
@@ -67,6 +67,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 		TOCLIENT_DETACHED_INVENTORY
 	PROTOCOL_VERSION 13:
 		InventoryList field "Width" (deserialization fails with old versions)
+		Versioned block data
+		TOSERVER_REQUEST_BLOCKS
 */
 
 #define PROTOCOL_VERSION 13
@@ -95,6 +97,13 @@ enum ToClientCommand
 	*/
 
 	TOCLIENT_BLOCKDATA = 0x20, //TODO: Multiple blocks
+	/*
+		 [0] u16 command
+		 [2] v3s16 position
+		 [8] u32 change counter
+		 Remainder is serialized MapBlock
+	*/
+
 	TOCLIENT_ADDNODE = 0x21,
 	TOCLIENT_REMOVENODE = 0x22,
 	
@@ -355,7 +364,17 @@ enum ToServerCommand
 		[0] u16 TOSERVER_INIT2
 	*/
 
-	TOSERVER_GETBLOCK=0x20, // Obsolete
+	TOSERVER_REQUEST_BLOCKS=0x20,
+	/*
+		u16 command
+		u16 timeout_ms
+		v3s16 pos_0
+		v3s16 pos_1
+		for each block {
+			u32 client_changenum
+		}
+	*/
+
 	TOSERVER_ADDNODE = 0x21, // Obsolete
 	TOSERVER_REMOVENODE = 0x22, // Obsolete
 
@@ -368,7 +387,7 @@ enum ToServerCommand
 		[2+12+12+4] s32 yaw*100
 	*/
 
-	TOSERVER_GOTBLOCKS = 0x24,
+	TOSERVER_GOTBLOCKS = 0x24, // Obsolete
 	/*
 		[0] u16 command
 		[2] u8 count
@@ -377,7 +396,7 @@ enum ToServerCommand
 		...
 	*/
 
-	TOSERVER_DELETEDBLOCKS = 0x25,
+	TOSERVER_DELETEDBLOCKS = 0x25, // Obsolete
 	/*
 		[0] u16 command
 		[2] u8 count

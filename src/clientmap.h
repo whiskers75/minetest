@@ -122,6 +122,9 @@ public:
 
 	void renderPostFx();
 
+	// For debugging the status and position of MapBlocks
+	void renderBlockBoundaries();
+
 	// For debug printing
 	virtual void PrintInfo(std::ostream &out);
 	
@@ -130,7 +133,10 @@ public:
 	{
 		return (m_last_drawn_sectors.find(p) != NULL);
 	}
-	
+
+	// Find blocks that were drawn, or that are just outside the drawn area
+	const core::map<v3s16, bool>& nextBlocksToRequest();
+
 private:
 	Client *m_client;
 	
@@ -146,7 +152,10 @@ private:
 	core::map<v3s16, MapBlock*> m_drawlist;
 	
 	core::map<v2s16, bool> m_last_drawn_sectors;
+
+	// True: drawn; False: not drawn due to lack of mesh data
+	core::map<v3s16, bool> m_last_blocks_needed;
+	bool m_next_to_request_list_needs_culling;
 };
 
 #endif
-

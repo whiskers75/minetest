@@ -429,6 +429,9 @@ public:
 	int m_num_sent;
 	int m_max_num_sent;
 	
+	// Updated in Connection::send() for throttling of sending on upper layer
+	u32 m_num_queued;
+	
 private:
 };
 
@@ -589,6 +592,8 @@ public:
 	u16 GetPeerID(){ return m_peer_id; }
 	Address GetPeerAddress(u16 peer_id);
 	float GetPeerAvgRTT(u16 peer_id);
+	u32 GetPeerOutgoingQueueSize(u16 peer_id);
+	float GetPeerOutgoingQueueSizeSeconds(u16 peer_id);
 	
 private:
 	void putEvent(ConnectionEvent &e);
