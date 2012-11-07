@@ -989,6 +989,13 @@ void ConnectionThread::receive()
 			ConnectionEvent e;
 			e.dataReceived(peer_id, data);
 			putEvent(e);
+
+			// Reset timeout and don't ping
+			Peer *peer = getPeerNoEx(peer_id);
+			if(peer){
+				peer->timeout_counter = 0.0;
+				peer->ping_timer = 0.0;
+			}
 		}
 	}
 }
@@ -1090,7 +1097,7 @@ void ConnectionThread::runTimeouts(float dtime)
 			SharedBuffer<u8> data(2);
 			writeU8(&data[0], TYPE_CONTROL);
 			writeU8(&data[1], CONTROLTYPE_PING);
-			rawSendAsPacket(peer->id, 0, data, true);
+			rawSendAsPacket(peer->id, 0, data, false);
 
 			peer->ping_timer = 0.0;
 		}
