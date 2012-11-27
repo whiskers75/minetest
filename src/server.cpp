@@ -54,6 +54,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/pointedthing.h"
 #include "util/mathconstants.h"
 #include "rollback.h"
+#include "util/serialize.h"
 
 #define PP(x) "("<<(x).X<<","<<(x).Y<<","<<(x).Z<<")"
 
@@ -881,9 +882,9 @@ void Server::AsyncRunStep()
 			/*
 				Send player inventories and HPs if necessary
 			*/
-			if(playersao->m_teleported){
+			if(playersao->m_moved){
 				SendMovePlayer(client->peer_id);
-				playersao->m_teleported = false;
+				playersao->m_moved = false;
 			}
 			if(playersao->m_inventory_not_sent){
 				UpdateCrafting(client->peer_id);
@@ -1480,11 +1481,22 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 			Read and check network protocol version
 		*/
 
-		u16 net_proto_version = 0;
+		u16 min_net_proto_version = 0;
 		if(datasize >= 2+1+PLAYERNAME_SIZE+PASSWORD_SIZE+2)
-		{
-			net_proto_version = readU16(&data[2+1+PLAYERNAME_SIZE+PASSWORD_SIZE]);
-		}
+			min_net_proto_version = readU16(&data[2+1+PLAYERNAME_SIZE+PASSWORD_SIZE]);
+
+		// Use min if version field doesn't exist (backwards compatibility)
+		u16 max_net_proto_version = min_net_proto_version;
+		if(datasize >= 2+1+PLAYERNAME_SIZE+PASSWORD_SIZE+2+2)
+			max_net_proto_version = readU16(&data[2+1+PLAYERNAME_SIZE+PASSWORD_SIZE+2]);
+
+		u16 net_proto_version = max_net_proto_version;
+		if(max_net_proto_version != SERVER_PROTOCOL_VERSION && min_net_proto_version <= SERVER_PROTOCOL_VERSION)
+			net_proto_version = SERVER_PROTOCOL_VERSION;
+
+		verbosestream<<"Server: "<<peer_id<<" Protocol version: min: "
+				<<min_net_proto_version<<", max: "<<max_net_proto_version
+				<<", chosen: "<<net_proto_version<<std::endl;
 
 		getClient(peer_id)->net_proto_version = net_proto_version;
 
@@ -1502,7 +1514,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		
 		if(g_settings->getBool("strict_protocol_version_checking"))
 		{
-			if(net_proto_version != PROTOCOL_VERSION)
+			if(net_proto_version != SERVER_PROTOCOL_VERSION)
 			{
 				actionstream<<"Server: A mismatched client tried to connect"
 						<<" from "<<addr_s<<std::endl;
@@ -1511,7 +1523,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 						L"Server version is ")
 						+ narrow_to_wide(VERSION_STRING) + L",\n"
 						+ L"server's PROTOCOL_VERSION is "
-						+ narrow_to_wide(itos(PROTOCOL_VERSION))
+						+ narrow_to_wide(itos(SERVER_PROTOCOL_VERSION))
 						+ L", client's PROTOCOL_VERSION is "
 						+ narrow_to_wide(itos(net_proto_version))
 				);
@@ -1655,11 +1667,12 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 			Answer with a TOCLIENT_INIT
 		*/
 		{
-			SharedBuffer<u8> reply(2+1+6+8);
+			SharedBuffer<u8> reply(2+1+6+8+4);
 			writeU16(&reply[0], TOCLIENT_INIT);
 			writeU8(&reply[2], deployed);
 			writeV3S16(&reply[2+1], floatToInt(playersao->getPlayer()->getPosition()+v3f(0,BS/2,0), BS));
 			writeU64(&reply[2+1+6], m_env->getServerMap().getSeed());
+			writeF1000(&reply[2+1+6+8], g_settings->getFloat("dedicated_server_step"));
 			
 			// Send as reliable
 			m_con.Send(peer_id, 0, reply, true);
@@ -1753,7 +1766,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		}
 		
 		// Warnings about protocol version can be issued here
-		if(getClient(peer_id)->net_proto_version < PROTOCOL_VERSION)
+		if(getClient(peer_id)->net_proto_version < SERVER_PROTOCOL_VERSION)
 		{
 			SendChatMessage(peer_id, L"# Server: WARNING: YOUR CLIENT IS OLD AND MAY WORK PROPERLY WITH THIS SERVER!");
 		}
@@ -1883,7 +1896,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	}
 	else if(command == TOSERVER_PLAYERPOS)
 	{
-		if(datasize < 2+12+12+4+4)
+		if(datasize < 2+12+12+4+4+4)
 			return;
 	
 		u32 start = 0;
@@ -1891,6 +1904,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		v3s32 ss = readV3S32(&data[start+2+12]);
 		f32 pitch = (f32)readS32(&data[2+12+12]) / 100.0;
 		f32 yaw = (f32)readS32(&data[2+12+12+4]) / 100.0;
+		u32 keyPressed = (u32)readU32(&data[2+12+12+4+4]);
 		v3f position((f32)ps.X/100., (f32)ps.Y/100., (f32)ps.Z/100.);
 		v3f speed((f32)ss.X/100., (f32)ss.Y/100., (f32)ss.Z/100.);
 		pitch = wrapDegrees(pitch);
@@ -1900,6 +1914,16 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		player->setSpeed(speed);
 		player->setPitch(pitch);
 		player->setYaw(yaw);
+		player->keyPressed=keyPressed;
+		player->control.up = (bool)(keyPressed&1);
+		player->control.down = (bool)(keyPressed&2);
+		player->control.left = (bool)(keyPressed&4);
+		player->control.right = (bool)(keyPressed&8);
+		player->control.jump = (bool)(keyPressed&16);
+		player->control.aux1 = (bool)(keyPressed&32);
+		player->control.sneak = (bool)(keyPressed&64);
+		player->control.LMB = (bool)(keyPressed&128);
+		player->control.RMB = (bool)(keyPressed&256);
 		
 		/*infostream<<"Server::ProcessData(): Moved player "<<peer_id<<" to "
 				<<"("<<position.X<<","<<position.Y<<","<<position.Z<<")"
@@ -2643,6 +2667,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 			}
 
 		} // action == 4
+		
 
 		/*
 			Catch invalid actions
@@ -3414,6 +3439,7 @@ void Server::fillMediaCache()
 		paths.push_back(mod.path + DIR_DELIM + "textures");
 		paths.push_back(mod.path + DIR_DELIM + "sounds");
 		paths.push_back(mod.path + DIR_DELIM + "media");
+		paths.push_back(mod.path + DIR_DELIM + "models");
 	}
 	std::string path_all = "textures";
 	paths.push_back(path_all + DIR_DELIM + "all");
@@ -3439,6 +3465,7 @@ void Server::fillMediaCache()
 				".png", ".jpg", ".bmp", ".tga",
 				".pcx", ".ppm", ".psd", ".wal", ".rgb",
 				".ogg",
+				".x", ".b3d", ".md2", ".obj",
 				NULL
 			};
 			if(removeStringEnd(filename, supported_ext) == ""){
