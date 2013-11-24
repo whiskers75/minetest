@@ -259,7 +259,7 @@ PointedThing getPointedThing(Client *client, v3f player_position,
 					    selection_box->MaxEdge + pos));
 	    }
 
-
+	  
 	  result.type = POINTEDTHING_OBJECT;
 	  result.object_id = selected_object->getId();
 	  return result;
@@ -319,7 +319,7 @@ PointedThing getPointedThing(Client *client, v3f player_position,
 	      aabb3f box = *i;
 	      box.MinEdge += npf;
 	      box.MaxEdge += npf;
-
+	      
 	      for(u16 j=0; j<6; j++)
 		{
 		  v3s16 facedir = g_6dirs[j];
@@ -512,7 +512,7 @@ public:
 	    j->second.max = value;
 	}
       }
-
+    
     // Assign colors
     static const video::SColor usable_colors[] = {
       video::SColor(255,255,100,100),
@@ -657,7 +657,7 @@ public:
     m_player_step_timer(0)
   {
   }
-
+  
   void playPlayerStep()
   {
     if(m_player_step_timer <= 0 && m_player_step_sound.exists()){
@@ -677,7 +677,7 @@ public:
     SoundMaker *sm = (SoundMaker*)data;
     sm->playPlayerStep();
   }
-
+  
   static void playerJump(MtEvent *e, void *data)
   {
     //SoundMaker *sm = (SoundMaker*)data;
@@ -707,7 +707,7 @@ public:
     SoundMaker *sm = (SoundMaker*)data;
     sm->m_sound->playSound(SimpleSoundSpec("player_damage", 0.5), false);
   }
-
+  
   static void playerFallingDamage(MtEvent *e, void *data)
   {
     SoundMaker *sm = (SoundMaker*)data;
@@ -1682,7 +1682,7 @@ void the_game(
 	  /*
 	    Direct handling of user input
 	  */
-		
+	  
 	  // Reset input if window not active or some menu is active
 	  if(device->isWindowActive() == false
 	     || noMenuActive() == false
@@ -1787,9 +1787,10 @@ void the_game(
 		  g_settings->set("free_move","true");
 		  statustext = L"Flying enabled";
 		  statustext_time = 0;
-		  if(!client.checkPrivilege("fly"))
+		  if(!client.checkPrivilege("fly")) {
 		    statustext = L"You cannot fly (no privs)";
 		    g_settings->set("free_move","false");
+		  }
 		}
 	    }
 	  else if(input->wasKeyDown(getKeySetting("keymap_jump")))
@@ -1807,9 +1808,10 @@ void the_game(
 		      g_settings->set("free_move","true");
 		      statustext = L"Flying enabled";
 		      statustext_time = 0;
-		      if(!client.checkPrivilege("fly"))
+		      if(!client.checkPrivilege("fly")) {
 			statustext = L"You cannot fly (no privs)";
                         g_settings->set("free_move","false");
+		      }
 		    }
 		}
 	      reset_jump_timer = true;
@@ -1825,11 +1827,12 @@ void the_game(
 	      else
 		{
 		  g_settings->set("fast_move","true");
-		  statustext = L"Speed enabled!";
+		  statustext = L"Speed enabled";
 		  statustext_time = 0;
-		  if(!client.checkPrivilege("fast"))
+		  if(!client.checkPrivilege("fast")) {
 		    statustext = L"You cannot use speed mode (no privs)";
-		  g_settings->set("fast_move","false");
+		    g_settings->set("fast_move","false");
+		  }
 		}
 	    }
 	  else if(input->wasKeyDown(getKeySetting("keymap_noclip")))
@@ -1845,9 +1848,10 @@ void the_game(
 		  g_settings->set("noclip","true");
 		  statustext = L"Noclip enabled";
 		  statustext_time = 0;
-		  if(!client.checkPrivilege("noclip"))
+		  if(!client.checkPrivilege("noclip")) {
 		    statustext = L"You cannot noclip (no privs)";
-                  g_settings->set("noclip","false");
+		    g_settings->set("noclip","false");
+		  }
 		}
 	    }
 	  else if(input->wasKeyDown(getKeySetting("keymap_screenshot")))
@@ -2872,7 +2876,7 @@ void the_game(
 	    fog_range = MYMIN(fog_range, (draw_control.farthest_drawn+20)*BS);
 	    fog_range *= 0.9;
 	  }
-
+	  
 	  /*
 	    Calculate general brightness
 	  */
