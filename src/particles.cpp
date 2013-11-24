@@ -257,7 +257,7 @@ void addNodeParticle(IGameDef* gamedef, scene::ISceneManager* smgr,
   // Texture
   u8 texid = myrand_range(0,5);
   video::ITexture *texture = tiles[texid].texture;
-
+  
   // Only use first frame of animated texture
   f32 ymax = 1;
   if(tiles[texid].material_flags & MATERIAL_FLAG_ANIMATION_VERTICAL_FRAMES)
