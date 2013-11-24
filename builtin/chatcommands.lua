@@ -88,18 +88,10 @@ minetest.register_chatcommand("help", {
 	end,
 })
 minetest.register_chatcommand("privs", {
-	params = "<name>",
+	params = "",
 	description = "print out privileges of player",
 	func = function(name, param)
-		if param == "" then
-			param = name
-		else
-			--[[if not minetest.check_player_privs(name, {privs=true}) then
-				minetest.chat_send_player(name, "Privileges of "..param.." are hidden from you.")
-				return
-			end]]
-		end
-		minetest.chat_send_player(name, "Privileges of "..param..": "..minetest.privs_to_string(minetest.get_player_privs(param), ' '))
+	   minetest.chat_send_player(name, "Privileges of "..name..": "..minetest.privs_to_string(minetest.get_player_privs(name), ' '))
 	end,
 })
 minetest.register_chatcommand("grant", {
@@ -268,7 +260,7 @@ minetest.register_chatcommand("teleport", {
 			end
 			return pos, false
 		end
-
+		
 		local teleportee = nil
 		local p = {}
 		p.x, p.y, p.z = string.match(param, "^([%d.-]+)[, ] *([%d.-]+)[, ] *([%d.-]+)$")
@@ -338,7 +330,7 @@ minetest.register_chatcommand("teleport", {
 				return
 			end
 		end
-
+		
 		minetest.chat_send_player(name, "Invalid parameters (\""..param.."\") or player not found (see /help teleport)")
 		return
 	end,
@@ -442,7 +434,7 @@ minetest.register_chatcommand("give", {
 	func = function(name, param)
 		local toname, itemstring = string.match(param, "^([^ ]+) +(.+)$")
 		if not toname or not itemstring then
-			minetest.chat_send_player(name, "name and itemstring required")
+		   minetest.chat_send_player(name, "Who and what should I give something? /give [name] [itemname]")
 			return
 		end
 		handle_give_command("/give", name, toname, itemstring)
@@ -455,7 +447,7 @@ minetest.register_chatcommand("giveme", {
 	func = function(name, param)
 		local itemstring = string.match(param, "(.+)$")
 		if not itemstring then
-			minetest.chat_send_player(name, "itemstring required")
+		   minetest.chat_send_player(name, "What item do you want me to give you? /giveme [itemname]")
 			return
 		end
 		handle_give_command("/giveme", name, name, itemstring)
@@ -495,10 +487,10 @@ minetest.register_chatcommand("pulverize", {
 			return true -- Handled chat message
 		end
 		if player:get_wielded_item():is_empty() then
-			minetest.chat_send_player(name, 'Unable to pulverize, no item in hand.')
+			minetest.chat_send_player(name, 'Hold something to pulverize.')
 		else
 			player:set_wielded_item(nil)
-			minetest.chat_send_player(name, 'An item was pulverized.')
+			minetest.chat_send_player(name, 'SMASH! Item pulverized.')
 		end
 	end,
 })
@@ -575,7 +567,7 @@ minetest.register_chatcommand("rollback", {
 			end
 		end
 		if success then
-			minetest.chat_send_player(name, "Reverting actions succeeded.")
+			minetest.chat_send_player(name, "Reverting actions succeeded. Grief averted! \o/")
 		else
 			minetest.chat_send_player(name, "Reverting actions FAILED.")
 		end
@@ -599,6 +591,12 @@ minetest.register_chatcommand("time", {
 		if param == "" then
 			minetest.chat_send_player(name, "Missing parameter")
 			return
+		end
+		if param == "day" then
+		   param = 6000
+		end
+		if param == "night" then
+		   param = 24000
 		end
 		local newtime = tonumber(param)
 		if newtime == nil then
