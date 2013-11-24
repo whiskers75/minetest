@@ -2568,12 +2568,12 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	    {
 	      message = message.substr(1);
 	      send_to_sender = true;
-	      line += L"-!- Command not found. Try /help for a list of known commands.";
+	      line += L"*** Command not found. Try /help for a list of known commands.";
 	    }
 	  else
 	    {
 	      if(checkPriv(player->getName(), "shout")){
-		line += L"<";
+		line += L"[Shout] <";
 		line += name;
 		line += L"> ";
 		line += message;
@@ -2626,7 +2626,6 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 			  <<std::endl;
 	      
 	      playersao->setHP(playersao->getHP() - damage);
-	      
 	      if(playersao->getHP() == 0 && playersao->m_hp_not_sent)
 		DiePlayer(peer_id);
 	      
@@ -2717,7 +2716,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	{
 	  if(player->hp != 0 || !g_settings->getBool("enable_damage"))
 	    return;
-          SendChatMessage(peer_id, L"--- Respawning you....");
+          SendChatMessage(peer_id, L"--- You have been granted another life.");
 	  RespawnPlayer(peer_id);
 	  
 	  actionstream<<player->getName()<<" respawns at "
@@ -2871,13 +2870,13 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	      }
 	      return;
 	    }
-
+	  
 	  /*
 	    If something goes wrong, this player is to blame
 	  */
 	  RollbackScopeActor rollback_scope(m_rollback,
 					    std::string("player:")+player->getName());
-
+	  
 	  /*
 	    0: start digging or punch object
 	  */
@@ -2911,11 +2910,11 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		  // Skip if object has been removed
 		  if(pointed_object->m_removed)
 		    return;
-
+		  
 		  actionstream<<player->getName()<<" punches object "
 			      <<pointed.object_id<<": "
 			      <<pointed_object->getDescription()<<std::endl;
-
+		  
 		  ItemStack punchitem = playersao->getWieldedItem();
 		  ToolCapabilities toolcap =
 		    punchitem.getToolCapabilities(m_itemdef);
@@ -2927,16 +2926,16 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		  pointed_object->punch(dir, &toolcap, playersao,
 					time_from_last_punch);
 		}
-
+	      
 	    } // action == 0
-
+	  
 	  /*
 	    1: stop digging
 	  */
 	  else if(action == 1)
 	    {
 	    } // action == 1
-
+	  
 	  /*
 	    2: Digging completed
 	  */
@@ -2957,7 +2956,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 				<<std::endl;
 		      m_emerge->enqueueBlockEmerge(peer_id, getNodeBlockPos(p_above), false);
 		    }
-
+		  
 		  /* Cheat prevention */
 		  bool is_valid_dig = true;
 		  if(!isSingleplayer() && !g_settings->getBool("disable_anticheat"))
@@ -2972,6 +2971,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 				  <<PP(nocheat_p)<<" and completed digging "
 				  <<PP(p_under)<<"; not digging."<<std::endl;
 			is_valid_dig = false;
+                        SendChatMessage(peer_id, L"*** Cheat alert! You tried to dig something that you didn't start digging!");
 			// Call callbacks
 			m_script->on_cheat(playersao, "finished_unknown_dig");
 		      }
@@ -2999,6 +2999,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 				  <<", which is not diggable with tool. not digging."
 				  <<std::endl;
 			is_valid_dig = false;
+                        SendChatMessage(peer_id, L"*** Cheat alert! You tried to dig something that you can't dig!");
 			// Call callbacks
 			m_script->on_cheat(playersao, "dug_unbreakable");
 		      }
@@ -3024,16 +3025,17 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 				  <<" completed digging "<<PP(p_under)
 				  <<"too fast; not digging."<<std::endl;
 			is_valid_dig = false;
+                        SendChatMessage(peer_id, L"*** Cheat alert! You tried to dig something too fast!");
 			// Call callbacks
 			m_script->on_cheat(playersao, "dug_too_fast");
 		      }
 		    }
-
+		  
 		  /* Actually dig node */
-
+		  
 		  if(is_valid_dig && n.getContent() != CONTENT_IGNORE)
 		    m_script->node_on_dig(p_under, n, playersao);
-
+		  
 		  // Send unusual result (that is, node not being removed)
 		  if(m_env->getMap().getNodeNoEx(p_under).getContent() != CONTENT_AIR)
 		    {

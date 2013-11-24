@@ -1831,7 +1831,6 @@ void the_game(
 		  statustext_time = 0;
 		  if(!client.checkPrivilege("fast")) {
 		    statustext = L"You cannot use speed mode (no privs)";
-		    g_settings->set("fast_move","false");
 		  }
 		}
 	    }
@@ -1850,7 +1849,6 @@ void the_game(
 		  statustext_time = 0;
 		  if(!client.checkPrivilege("noclip")) {
 		    statustext = L"You cannot noclip (no privs)";
-		    g_settings->set("noclip","false");
 		  }
 		}
 	    }
@@ -2005,14 +2003,14 @@ void the_game(
 	      statustext_time = 0;
 	    }
 	  }
-
+	  
 	  // Item selection with mouse wheel
 	  u16 new_playeritem = client.getPlayerItem();
 	  {
 	    s32 wheel = input->getMouseWheel();
 	    u16 max_item = MYMIN(PLAYER_INVENTORY_SIZE-1,
 				 player->hud_hotbar_itemcount-1);
-
+	    
 	    if(wheel < 0)
 	      {
 		if(new_playeritem < max_item)
@@ -2028,7 +2026,7 @@ void the_game(
 		  new_playeritem = max_item;
 	      }
 	  }
-		
+	  
 	  // Item selection
 	  for(u16 i=0; i<10; i++)
 	    {
@@ -2038,13 +2036,13 @@ void the_game(
 		  if(i < PLAYER_INVENTORY_SIZE && i < player->hud_hotbar_itemcount)
 		    {
 		      new_playeritem = i;
-
+		      
 		      infostream<<"Selected item: "
 				<<new_playeritem<<std::endl;
 		    }
 		}
 	    }
-
+	  
 	  // Viewing range selection
 	  if(input->wasKeyDown(getKeySetting("keymap_rangeselect")))
 	    {
@@ -2062,7 +2060,7 @@ void the_game(
 		  statustext_time = 0;
 		}
 	    }
-
+	  
 	  // Print debug stacks
 	  if(input->wasKeyDown(getKeySetting("keymap_print_debug_stacks")))
 	    {
@@ -2073,12 +2071,12 @@ void the_game(
 		     <<std::endl;
 	      debug_stacks_print();
 	    }
-
+	  
 	  /*
 	    Mouse and camera control
 	    NOTE: Do this before client.setPlayerControl() to not cause a camera lag of one frame
 	  */
-		
+	  
 	  float turn_amount = 0;
 	  if((device->isWindowActive() && noMenuActive()) || random_input)
 	    {
@@ -2088,7 +2086,7 @@ void the_game(
 		  if(device->getCursorControl()->isVisible())
 		    device->getCursorControl()->setVisible(false);
 		}
-
+	      
 	      if(first_loop_after_window_activation){
 		//infostream<<"window active, first loop"<<std::endl;
 		first_loop_after_window_activation = false;
@@ -2099,7 +2097,7 @@ void the_game(
 		if(invert_mouse)
 		  dy = -dy;
 		//infostream<<"window active, pos difference "<<dx<<","<<dy<<std::endl;
-				
+		
 		/*const float keyspeed = 500;
 		  if(input->isKeyDown(irr::KEY_UP))
 		  dy -= dtime * keyspeed;
@@ -2109,14 +2107,14 @@ void the_game(
 		  dx -= dtime * keyspeed;
 		  if(input->isKeyDown(irr::KEY_RIGHT))
 		  dx += dtime * keyspeed;*/
-				
+		
 		float d = g_settings->getFloat("mouse_sensitivity");
 		d = rangelim(d, 0.01, 100.0);
 		camera_yaw -= dx*d;
 		camera_pitch += dy*d;
 		if(camera_pitch < -89.5) camera_pitch = -89.5;
 		if(camera_pitch > 89.5) camera_pitch = 89.5;
-				
+		
 		turn_amount = v2f(dx, dy).getLength() * d;
 	      }
 	      input->setMousePos(displaycenter.X, displaycenter.Y);
@@ -2125,13 +2123,13 @@ void the_game(
 	    // Mac OSX gets upset if this is set every frame
 	    if(device->getCursorControl()->isVisible() == false)
 	      device->getCursorControl()->setVisible(true);
-
+	    
 	    //infostream<<"window inactive"<<std::endl;
 	    first_loop_after_window_activation = true;
 	  }
 	  recent_turn_speed = recent_turn_speed * 0.9 + turn_amount * 0.1;
 	  //std::cerr<<"recent_turn_speed = "<<recent_turn_speed<<std::endl;
-
+	  
 	  /*
 	    Player speed control
 	  */
@@ -2174,27 +2172,27 @@ void the_game(
 	    LocalPlayer* player = client.getEnv().getLocalPlayer();
 	    player->keyPressed=keyPressed;
 	  }
-		
+	  
 	  /*
 	    Run server
 	  */
-
+	  
 	  if(server != NULL)
 	    {
 	      //TimeTaker timer("server->step(dtime)");
 	      server->step(dtime);
 	    }
-
+	  
 	  /*
 	    Process environment
 	  */
-		
+	  
 	  {
 	    //TimeTaker timer("client.step(dtime)");
 	    client.step(dtime);
 	    //client.step(dtime_avg1);
 	  }
-
+	  
 	  {
 	    // Read client events
 	    for(;;)
@@ -2207,16 +2205,15 @@ void the_game(
 		else if(event.type == CE_PLAYER_DAMAGE &&
 			client.getHP() != 0)
 		  {
-		    //u16 damage = event.player_damage.amount;
-		    //infostream<<"Player damage: "<<damage<<std::endl;
-
+		    u16 damage = event.player_damage.amount;
+		    infostream<<"Player damage: "<<damage<<std::endl;
+		    
 		    damage_flash += 100.0;
 		    damage_flash += 8.0 * event.player_damage.amount;
-
 		    player->hurt_tilt_timer = 1.5;
 		    player->hurt_tilt_strength = event.player_damage.amount/2;
 		    player->hurt_tilt_strength = rangelim(player->hurt_tilt_strength, 2.0, 10.0);
-
+		    
 		    MtEvent *e = new SimpleTriggerEvent("PlayerDamage");
 		    gamedef->event()->put(e);
 		  }
@@ -2229,7 +2226,7 @@ void the_game(
 		  {
 		    if(respawn_menu_active)
 		      continue;
-
+		    
 		    /*bool set_camera_point_target =
 		      event.deathscreen.set_camera_point_target;
 		      v3f camera_point_target;
@@ -2243,17 +2240,17 @@ void the_game(
 		      new GUIDeathScreen(guienv, guiroot, -1, 
 					 &g_menumgr, respawner);
 		    menu->drop();
-					
-		    chat_backend.addMessage(L"", L"You died.");
-
+		    
+		    chat_backend.addMessage(L"", L"Death has overcome you! D: [respawn]");
+		    
 		    /* Handle visualization */
-
+		    
 		    damage_flash = 0;
-
+		    
 		    LocalPlayer* player = client.getEnv().getLocalPlayer();
 		    player->hurt_tilt_timer = 0;
 		    player->hurt_tilt_strength = 0;
-
+		    
 		    /*LocalPlayer* player = client.getLocalPlayer();
 		      player->setPosition(player->getPosition() + v3f(0,-BS,0));
 		      camera.update(player, busytime, screensize);*/
@@ -2294,7 +2291,7 @@ void the_game(
 		    LocalPlayer* player = client.getEnv().getLocalPlayer();
 		    video::ITexture *texture =
 		      gamedef->tsrc()->getTexture(*(event.spawn_particle.texture));
-
+		    
 		    new Particle(gamedef, smgr, player, client.getEnv(),
 				 *event.spawn_particle.pos,
 				 *event.spawn_particle.vel,
@@ -2311,7 +2308,7 @@ void the_game(
 		    LocalPlayer* player = client.getEnv().getLocalPlayer();
 		    video::ITexture *texture =
 		      gamedef->tsrc()->getTexture(*(event.add_particlespawner.texture));
-
+		    
 		    new ParticleSpawner(gamedef, smgr, player,
 					event.add_particlespawner.amount,
 					event.add_particlespawner.spawntime,
@@ -2346,7 +2343,7 @@ void the_game(
 		      delete event.hudadd.offset;
 		      continue;
 		    }
-					
+		    
 		    HudElement *e = new HudElement;
 		    e->type   = (HudElementType)event.hudadd.type;
 		    e->pos    = *event.hudadd.pos;
@@ -2358,12 +2355,12 @@ void the_game(
 		    e->dir    = event.hudadd.dir;
 		    e->align  = *event.hudadd.align;
 		    e->offset = *event.hudadd.offset;
-					
+		    
 		    if (id == nhudelem)
 		      player->hud.push_back(e);
 		    else
 		      player->hud[id] = e;
-
+		    
 		    delete event.hudadd.pos;
 		    delete event.hudadd.name;
 		    delete event.hudadd.scale;
@@ -2387,7 +2384,7 @@ void the_game(
 		      delete event.hudchange.sdata;
 		      continue;
 		    }
-						
+		    
 		    HudElement* e = player->hud[id];
 		    switch (event.hudchange.stat) {
 		    case HUD_STAT_POS:
@@ -2418,15 +2415,15 @@ void the_game(
 		      e->offset = *event.hudchange.v2fdata;
 		      break;
 		    }
-					
+		    
 		    delete event.hudchange.v2fdata;
 		    delete event.hudchange.sdata;
 		  }
 	      }
 	  }
-		
+	  
 	  //TimeTaker //timer2("//timer2");
-
+	  
 	  /*
 	    For interaction purposes, get info about the held item
 	    - What item is it?
@@ -2445,11 +2442,11 @@ void the_game(
 	    playeritem.getDefinition(itemdef);
 	  ToolCapabilities playeritem_toolcap =
 	    playeritem.getToolCapabilities(itemdef);
-		
+	  
 	  /*
 	    Update camera
 	  */
-
+	  
 	  LocalPlayer* player = client.getEnv().getLocalPlayer();
 	  float full_punch_interval = playeritem_toolcap.full_punch_interval;
 	  float tool_reload_ratio = time_from_last_punch / full_punch_interval;
@@ -2457,42 +2454,42 @@ void the_game(
 	  camera.update(player, dtime, busytime, screensize,
 			tool_reload_ratio);
 	  camera.step(dtime);
-
+	  
 	  v3f player_position = player->getPosition();
 	  v3s16 pos_i = floatToInt(player_position, BS);
 	  v3f camera_position = camera.getPosition();
 	  v3f camera_direction = camera.getDirection();
 	  f32 camera_fov = camera.getFovMax();
-		
+	  
 	  if(!disable_camera_update){
 	    client.getEnv().getClientMap().updateCamera(camera_position,
 							camera_direction, camera_fov);
 	  }
-		
+	  
 	  // Update sound listener
 	  sound->updateListener(camera.getCameraNode()->getPosition(),
 				v3f(0,0,0), // velocity
 				camera.getDirection(),
 				camera.getCameraNode()->getUpVector());
 	  sound->setListenerGain(g_settings->getFloat("sound_volume"));
-
+	  
 	  /*
 	    Update sound maker
 	  */
 	  {
 	    soundmaker.step(dtime);
-			
+	    
 	    ClientMap &map = client.getEnv().getClientMap();
 	    MapNode n = map.getNodeNoEx(player->getStandingNodePos());
 	    soundmaker.m_player_step_sound = nodedef->get(n).sound_footstep;
 	  }
-
+	  
 	  /*
 	    Calculate what block is the crosshair pointing to
 	  */
-		
+	  
 	  //u32 t1 = device->getTimer()->getRealTime();
-		
+	  
 	  f32 d = playeritem_def.range; // max. distance
 	  f32 d_hand = itemdef->get("").range;
 	  if(d < 0 && d_hand >= 0)
@@ -2501,9 +2498,9 @@ void the_game(
 	    d = 4.0;
 	  core::line3d<f32> shootline(camera_position,
 				      camera_position + camera_direction * BS * (d+1));
-
+	  
 	  ClientActiveObject *selected_object = NULL;
-
+	  
 	  PointedThing pointed = getPointedThing(
 						 // input
 						 &client, player_position, camera_direction,
@@ -2512,13 +2509,13 @@ void the_game(
 						 // output
 						 hilightboxes,
 						 selected_object);
-
+	  
 	  if(pointed != pointed_old)
 	    {
 	      infostream<<"Pointing at "<<pointed.dump()<<std::endl;
 	      //dstream<<"Pointing at "<<pointed.dump()<<std::endl;
 	    }
-
+	  
 	  /*
 	    Stop digging when
 	    - releasing left mouse button
@@ -2559,15 +2556,15 @@ void the_game(
 	    {
 	      ldown_for_dig = false;
 	    }
-
+	  
 	  bool left_punch = false;
 	  soundmaker.m_player_leftpunch_sound.name = "";
-
+	  
 	  if(input->getRightState())
 	    repeat_rightclick_timer += dtime;
 	  else
 	    repeat_rightclick_timer = 0;
-
+	  
 	  if(playeritem_def.usable && input->getLeftState())
 	    {
 	      if(input->getLeftClicked())
@@ -2577,11 +2574,11 @@ void the_game(
 	    {
 	      v3s16 nodepos = pointed.node_undersurface;
 	      v3s16 neighbourpos = pointed.node_abovesurface;
-
+	      
 	      /*
 		Check information text of node
 	      */
-			
+	      
 	      ClientMap &map = client.getEnv().getClientMap();
 	      NodeMetadata *meta = map.getNodeMetadata(nodepos);
 	      if(meta){
@@ -2593,11 +2590,11 @@ void the_game(
 		  infotext += narrow_to_wide(nodedef->get(n).name);
 		}
 	      }
-			
+	      
 	      /*
 		Handle digging
 	      */
-			
+	      
 	      if(nodig_delay_timer <= 0.0 && input->getLeftState()
 		 && client.checkPrivilege("interact"))
 		{
@@ -2609,7 +2606,7 @@ void the_game(
 		      ldown_for_dig = true;
 		    }
 		  MapNode n = client.getEnv().getClientMap().getNode(nodepos);
-				
+		  
 		  // NOTE: Similar piece of code exists on the server side for
 		  // cheat detection.
 		  // Get digging parameters
@@ -2622,9 +2619,9 @@ void the_game(
 		    if(tp)
 		      params = getDigParams(nodedef->get(n).groups, tp);
 		  }
-
+		  
 		  float dig_time_complete = 0.0;
-
+		  
 		  if(params.diggable == false)
 		    {
 		      // I guess nobody will wait for this long
@@ -2642,7 +2639,7 @@ void the_game(
 			     nodepos, features.tiles);
 			}
 		    }
-
+		  
 		  if(dig_time_complete >= 0.001)
 		    {
 		      dig_index = (u16)((float)crack_animation_length
@@ -2653,7 +2650,7 @@ void the_game(
 		    {
 		      dig_index = crack_animation_length;
 		    }
-
+		  
 		  SimpleSoundSpec sound_dig = nodedef->get(n).sound_dig;
 		  if(sound_dig.exists() && params.diggable){
 		    if(sound_dig.name == "__group"){
@@ -2667,7 +2664,7 @@ void the_game(
 		      soundmaker.m_player_leftpunch_sound = sound_dig;
 		    }
 		  }
-
+		  
 		  // Don't show cracks if not diggable
 		  if(dig_time_complete >= 100000.0)
 		    {
@@ -2685,7 +2682,7 @@ void the_game(
 		      client.setCrack(-1, v3s16(0,0,0));
 		      MapNode wasnode = map.getNode(nodepos);
 		      client.removeNode(nodepos);
-
+		      
 		      if (g_settings->getBool("enable_particles"))
 			{
 			  const ContentFeatures &features =
@@ -2694,13 +2691,13 @@ void the_game(
 			    (gamedef, smgr, player, client.getEnv(),
 			     nodepos, features.tiles);
 			}
-
+		      
 		      dig_time = 0;
 		      digging = false;
-
+		      
 		      nodig_delay_timer = dig_time_complete
 			/ (float)crack_animation_length;
-
+		      
 		      // We don't want a corresponding delay to
 		      // very time consuming nodes
 		      if(nodig_delay_timer > 0.3)
@@ -2710,22 +2707,22 @@ void the_game(
 		      float mindelay = 0.15;
 		      if(nodig_delay_timer < mindelay)
 			nodig_delay_timer = mindelay;
-					
+		      
 		      // Send event to trigger sound
 		      MtEvent *e = new NodeDugEvent(nodepos, wasnode);
 		      gamedef->event()->put(e);
 		    }
-
+		  
 		  if(dig_time_complete < 100000.0)
 		    dig_time += dtime;
 		  else {
 		    dig_time = 0;
 		    client.setCrack(-1, nodepos);
 		  }
-
+		  
 		  camera.setDigging(0);  // left click animation
 		}
-
+	      
 	      if((input->getRightClicked() ||
 		  repeat_rightclick_timer >=
 		  g_settings->getFloat("repeat_rightclick_time")) &&
@@ -2733,7 +2730,7 @@ void the_game(
 		{
 		  repeat_rightclick_timer = 0;
 		  infostream<<"Ground right-clicked"<<std::endl;
-				
+		  
 		  // Sign special case, at least until formspec is properly implemented.
 		  // Deprecated?
 		  if(meta && meta->getString("formspec") == "hack:sign_text_input" 
@@ -2741,13 +2738,13 @@ void the_game(
 		     && !input->isKeyDown(getKeySetting("keymap_sneak")))
 		    {
 		      infostream<<"Launching metadata text input"<<std::endl;
-					
+		      
 		      // Get a new text for it
-
+		      
 		      TextDest *dest = new TextDestNodeMetadata(nodepos, &client);
-
+		      
 		      std::wstring wtext = narrow_to_wide(meta->getString("text"));
-
+		      
 		      (new GUITextInputMenu(guienv, guiroot, -1,
 					    &g_menumgr, dest,
 					    wtext))->drop();
@@ -2757,12 +2754,12 @@ void the_game(
 			  && !input->isKeyDown(getKeySetting("keymap_sneak")))
 		    {
 		      infostream<<"Launching custom inventory view"<<std::endl;
-
+		      
 		      InventoryLocation inventoryloc;
 		      inventoryloc.setNodeMeta(nodepos);
-					
+		      
 		      /* Create menu */
-
+		      
 		      GUIFormSpecMenu *menu =
 			new GUIFormSpecMenu(device, guiroot, -1,
 					    &g_menumgr,
@@ -2780,13 +2777,13 @@ void the_game(
 		      // Report to server
 		      client.interact(3, pointed);
 		      camera.setDigging(1);  // right click animation
-					
+		      
 		      // If the wielded item has node placement prediction,
 		      // make that happen
 		      bool placed = nodePlacementPrediction(client,
 							    playeritem_def,
 							    nodepos, neighbourpos);
-					
+		      
 		      // Read the sound
 		      if(placed)
 			soundmaker.m_player_rightpunch_sound =
@@ -2800,11 +2797,11 @@ void the_game(
 	  else if(pointed.type == POINTEDTHING_OBJECT)
 	    {
 	      infotext = narrow_to_wide(selected_object->infoText());
-
+	      
 	      if(infotext == L"" && show_debug){
 		infotext = narrow_to_wide(selected_object->debugInfoText());
 	      }
-
+	      
 	      //if(input->getLeftClicked())
 	      if(input->getLeftState())
 		{
@@ -2826,7 +2823,7 @@ void the_game(
 		    // Report direct punch
 		    v3f objpos = selected_object->getPosition();
 		    v3f dir = (objpos - player_position).normalize();
-					
+		    
 		    bool disable_send = selected_object->directReportPunch(
 									   dir, &playeritem, time_from_last_punch);
 		    time_from_last_punch = 0;
@@ -2845,28 +2842,28 @@ void the_game(
 	      // When button is held down in air, show continuous animation
 	      left_punch = true;
 	    }
-
+	  
 	  pointed_old = pointed;
-		
+	  
 	  if(left_punch || input->getLeftClicked())
 	    {
 	      camera.setDigging(0); // left click animation
 	    }
-
+	  
 	  input->resetLeftClicked();
 	  input->resetRightClicked();
-
+	  
 	  input->resetLeftReleased();
 	  input->resetRightReleased();
-		
+	  
 	  /*
 	    Calculate stuff for drawing
 	  */
-
+	  
 	  /*
 	    Fog range
 	  */
-	
+	  
 	  if(draw_control.range_all)
 	    fog_range = 100000*BS;
 	  else {
@@ -2885,7 +2882,7 @@ void the_game(
 	  float direct_brightness = 0;
 	  bool sunlight_seen = false;
 	  if(g_settings->getBool("free_move")){
-	    direct_brightness = time_brightness;
+	    direct_brightness = 1000;
 	    sunlight_seen = true;
 	  } else {
 	    ScopeProfiler sp(g_profiler, "Detecting background light", SPT_AVG);
@@ -2895,7 +2892,7 @@ void the_game(
 				       daynight_ratio, (int)(old_brightness*255.5), &sunlight_seen)
 	      / 255.0;
 	  }
-		
+	  
 	  time_of_day = client.getEnv().getTimeOfDayF();
 	  float maxsm = 0.05;
 	  if(fabs(time_of_day - time_of_day_smooth) > maxsm &&
@@ -2909,13 +2906,13 @@ void the_game(
 	  else
 	    time_of_day_smooth = time_of_day_smooth * (1.0-todsm)
 	      + time_of_day * todsm;
-			
+	  
 	  sky->update(time_of_day_smooth, time_brightness, direct_brightness,
 		      sunlight_seen);
-		
+	  
 	  video::SColor bgcolor = sky->getBgColor();
 	  video::SColor skycolor = sky->getSkyColor();
-
+	  
 	  /*
 	    Update clouds
 	  */
@@ -2929,7 +2926,7 @@ void the_game(
 	      clouds->setVisible(false);
 	    }
 	  }
-		
+	  
 	  /*
 	    Update particles
 	  */
