@@ -1,17 +1,17 @@
 /*
   Minetest
   Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
-
+  
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU Lesser General Public License as published by
   the Free Software Foundation; either version 2.1 of the License, or
   (at your option) any later version.
-
+  
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU Lesser General Public License for more details.
-
+  
   You should have received a copy of the GNU Lesser General Public License along
   with this program; if not, write to the Free Software Foundation, Inc.,
   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
@@ -76,38 +76,38 @@ public:
 class ServerThread : public SimpleThread
 {
   Server *m_server;
-
+  
 public:
-
+  
   ServerThread(Server *server):
     SimpleThread(),
     m_server(server)
   {
   }
-
+  
   void * Thread();
 };
 
 void * ServerThread::Thread()
 {
   ThreadStarted();
-
+  
   log_register_thread("ServerThread");
-
+  
   DSTACK(__FUNCTION_NAME);
-
+  
   BEGIN_DEBUG_EXCEPTION_HANDLER
-
+    
     while(getRun())
       {
 	try{
 	  //TimeTaker timer("AsyncRunStep() + Receive()");
-
+	  
 	  {
 	    //TimeTaker timer("AsyncRunStep()");
 	    m_server->AsyncRunStep();
 	  }
-
+	  
 	  //infostream<<"Running m_server->Receive()"<<std::endl;
 	  m_server->Receive();
 	}
@@ -130,9 +130,9 @@ void * ServerThread::Thread()
 	    m_server->setAsyncFatalError(e.what());
 	  }
       }
-
+  
   END_DEBUG_EXCEPTION_HANDLER(errorstream)
-
+    
     return NULL;
 }
 
@@ -164,19 +164,19 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
   
   /*u32 timer_result;
     TimeTaker timer("RemoteClient::GetNextBlocks", &timer_result);*/
-
+  
   // Increment timers
   m_nothing_to_send_pause_timer -= dtime;
   m_nearest_unsent_reset_timer += dtime;
-
+  
   if(m_nothing_to_send_pause_timer >= 0)
     return;
-
+  
   Player *player = server->m_env->getPlayer(peer_id);
   // This can happen sometimes; clients and players are not in perfect sync.
   if(player == NULL)
     return;
-
+  
   // Won't send anything if already sending
   if(m_blocks_sending.size() >= g_settings->getU16
      ("max_simultaneous_block_sends_per_client"))
@@ -184,9 +184,9 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
       //infostream<<"Not sending any blocks, Queue full."<<std::endl;
       return;
     }
-
+  
   //TimeTaker timer("RemoteClient::GetNextBlocks");
-
+  
   v3f playerpos = player->getPosition();
   v3f playerspeed = player->getSpeed();
   v3f playerspeeddir(0,0,0);
@@ -194,33 +194,33 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
     playerspeeddir = playerspeed / playerspeed.getLength();
   // Predict to next block
   v3f playerpos_predicted = playerpos + playerspeeddir*MAP_BLOCKSIZE*BS;
-
+  
   v3s16 center_nodepos = floatToInt(playerpos_predicted, BS);
-
+  
   v3s16 center = getNodeBlockPos(center_nodepos);
-
+  
   // Camera position and direction
   v3f camera_pos = player->getEyePosition();
   v3f camera_dir = v3f(0,0,1);
   camera_dir.rotateYZBy(player->getPitch());
   camera_dir.rotateXZBy(player->getYaw());
-
+  
   /*infostream<<"camera_dir=("<<camera_dir.X<<","<<camera_dir.Y<<","
     <<camera_dir.Z<<")"<<std::endl;*/
-
+  
   /*
     Get the starting value of the block finder radius.
   */
-
+  
   if(m_last_center != center)
     {
       m_nearest_unsent_d = 0;
       m_last_center = center;
     }
-
+  
   /*infostream<<"m_nearest_unsent_reset_timer="
     <<m_nearest_unsent_reset_timer<<std::endl;*/
-
+  
   // Reset periodically to workaround for some bugs or stuff
   if(m_nearest_unsent_reset_timer > 20.0)
     {
@@ -229,19 +229,19 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
       //infostream<<"Resetting m_nearest_unsent_d for "
       //		<<server->getPlayerName(peer_id)<<std::endl;
     }
-
+  
   //s16 last_nearest_unsent_d = m_nearest_unsent_d;
   s16 d_start = m_nearest_unsent_d;
-
+  
   //infostream<<"d_start="<<d_start<<std::endl;
-
+  
   u16 max_simul_sends_setting = g_settings->getU16
     ("max_simultaneous_block_sends_per_client");
   u16 max_simul_sends_usually = max_simul_sends_setting;
-
+  
   /*
     Check the time from last addNode/removeNode.
-
+    
     Decrease send rate if player is building stuff.
   */
   m_time_from_building += dtime;
@@ -251,45 +251,45 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
       max_simul_sends_usually
 	= LIMITED_MAX_SIMULTANEOUS_BLOCK_SENDS;
     }
-
+  
   /*
     Number of blocks sending + number of blocks selected for sending
   */
   u32 num_blocks_selected = m_blocks_sending.size();
-
+  
   /*
     next time d will be continued from the d from which the nearest
     unsent block was found this time.
-
+    
     This is because not necessarily any of the blocks found this
     time are actually sent.
   */
   s32 new_nearest_unsent_d = -1;
-
+  
   s16 d_max = g_settings->getS16("max_block_send_distance");
   s16 d_max_gen = g_settings->getS16("max_block_generate_distance");
-
+  
   // Don't loop very much at a time
   s16 max_d_increment_at_time = 2;
   if(d_max > d_start + max_d_increment_at_time)
     d_max = d_start + max_d_increment_at_time;
   /*if(d_max_gen > d_start+2)
     d_max_gen = d_start+2;*/
-
+  
   //infostream<<"Starting from "<<d_start<<std::endl;
-
+  
   s32 nearest_emerged_d = -1;
   s32 nearest_emergefull_d = -1;
   s32 nearest_sent_d = -1;
   bool queue_is_full = false;
-
+  
   s16 d;
   for(d = d_start; d <= d_max; d++)
     {
       /*errorstream<<"checking d="<<d<<" for "
 	<<server->getPlayerName(peer_id)<<std::endl;*/
       //infostream<<"RemoteClient::SendBlocks(): d="<<d<<std::endl;
-
+      
       /*
 	If m_nearest_unsent_d was changed by the EmergeThread
 	(it can change it to 0 through SetBlockNotSent),
@@ -308,38 +308,38 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
       */
       std::list<v3s16> list;
       getFacePositions(list, d);
-
+      
       std::list<v3s16>::iterator li;
       for(li=list.begin(); li!=list.end(); ++li)
 	{
 	  v3s16 p = *li + center;
-
+	  
 	  /*
 	    Send throttling
 	    - Don't allow too many simultaneous transfers
 	    - EXCEPT when the blocks are very close
-
+	    
 	    Also, don't send blocks that are already flying.
 	  */
-
+	  
 	  // Start with the usual maximum
 	  u16 max_simul_dynamic = max_simul_sends_usually;
-
+	  
 	  // If block is very close, allow full maximum
 	  if(d <= BLOCK_SEND_DISABLE_LIMITS_MAX_D)
 	    max_simul_dynamic = max_simul_sends_setting;
-
+	  
 	  // Don't select too many blocks for sending
 	  if(num_blocks_selected >= max_simul_dynamic)
 	    {
 	      queue_is_full = true;
 	      goto queue_full_break;
 	    }
-
+	  
 	  // Don't send blocks that are currently being transferred
 	  if(m_blocks_sending.find(p) != m_blocks_sending.end())
 	    continue;
-
+	  
 	  /*
 	    Do not go over-limit
 	  */
@@ -353,17 +353,17 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
 	  
 	  // If this is true, inexistent block will be made from scratch
 	  bool generate = d <= d_max_gen;
-
+	  
 	  {
 	    /*// Limit the generating area vertically to 2/3
 	      if(abs(p.Y - center.Y) > d_max_gen - d_max_gen / 3)
 	      generate = false;*/
-
+	    
 	    // Limit the send area vertically to 1/2
 	    if(abs(p.Y - center.Y) > d_max / 2)
 	      continue;
 	  }
-
+	  
 #if 0
 	  /*
 	    If block is far away, don't generate it unless it is
@@ -382,7 +382,7 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
 	      v2s16 p2d_nodes_center(
 				     MAP_BLOCKSIZE*p.X,
 				     MAP_BLOCKSIZE*p.Z);
-
+	      
 	      // Get ground height in nodes
 	      s16 gh = server->m_env->getServerMap().findGroundLevel(
 								     p2d_nodes_center);
@@ -395,7 +395,7 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
 #endif
 	    }
 #endif
-
+	  
 	  //infostream<<"d="<<d<<std::endl;
 #if 1
 	  /*
@@ -403,7 +403,7 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
 	    FIXME This only works if the client uses a small enough
 	    FOV setting. The default of 72 degrees is fine.
 	  */
-
+	  
 	  float camera_fov = (72.0*M_PI/180) * 4./3.;
 	  if(isBlockInSight(p, camera_pos, camera_dir, camera_fov, 10000*BS) == false)
 	    {
@@ -419,7 +419,7 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
 		continue;
 	      }
 	  }
-
+	  
 	  /*
 	    Check if map has this block
 	  */
@@ -529,7 +529,7 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
 		  nearest_emergefull_d = d;
 		goto queue_full_break;
 	      }
-				
+	      
 	      // get next one.
 	      continue;
 	    }
@@ -543,7 +543,7 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
 
 	  /*errorstream<<"sending from d="<<d<<" to "
 	    <<server->getPlayerName(peer_id)<<std::endl;*/
-
+	  
 	  PrioritySortedBlockTransfer q((float)d, p, peer_id);
 
 	  dest.push_back(q);
@@ -1153,7 +1153,7 @@ void Server::AsyncRunStep()
 	PlayerSAO *playersao = getPlayerSAO(client->peer_id);
 	if(playersao == NULL)
 	  continue;
-
+	
 	/*
 	  Handle player HPs (die if hp=0)
 	*/
@@ -1164,7 +1164,7 @@ void Server::AsyncRunStep()
 	    else
 	      SendPlayerHP(client->peer_id);
 	  }
-
+	
 	/*
 	  Send player breath if changed
 	*/
@@ -1415,7 +1415,7 @@ void Server::AsyncRunStep()
       */
 
       core::map<u16, bool> all_known_objects;
-
+      
       for(core::map<u16, RemoteClient*>::Iterator
 	    i = m_clients.getIterator();
 	  i.atEnd() == false; i++)
@@ -1550,7 +1550,7 @@ void Server::AsyncRunStep()
 	  delete i->second;
 	}
     }
-
+    
   } // enable_experimental
 
   /*
@@ -1563,7 +1563,7 @@ void Server::AsyncRunStep()
 
     // Don't send too many at a time
     //u32 count = 0;
-
+    
     // Single change sending is disabled if queue size is not small
     bool disable_single_change_sending = false;
     if(m_unsent_map_edit_queue.size() >= 4)
@@ -1671,7 +1671,7 @@ void Server::AsyncRunStep()
       verbosestream<<"Server: MapEditEvents:"<<std::endl;
       prof.print(verbosestream);
     }
-
+    
   }
 
   /*
@@ -1703,7 +1703,7 @@ void Server::AsyncRunStep()
 	JMutexAutoLock lock(m_env_mutex);
 
 	ScopeProfiler sp(g_profiler, "Server: saving stuff");
-
+	
 	//Ban stuff
 	if(m_banmanager->isModified())
 	  m_banmanager->save();
@@ -1804,7 +1804,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	return;
       
       ToServerCommand command = (ToServerCommand)readU16(&data[0]);
-
+      
       if(command == TOSERVER_INIT)
 	{
 	  // [0] u16 TOSERVER_INIT
@@ -1864,7 +1864,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	  /*
 	    Read and check network protocol version
 	  */
-
+	  
 	  u16 min_net_proto_version = 0;
 	  if(datasize >= 2+1+PLAYERNAME_SIZE+PASSWORD_SIZE+2)
 	    min_net_proto_version = readU16(&data[2+1+PLAYERNAME_SIZE+PASSWORD_SIZE]);
@@ -1893,7 +1893,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	  verbosestream<<"Server: "<<addr_s<<": Protocol version: min: "
 		       <<min_net_proto_version<<", max: "<<max_net_proto_version
 		       <<", chosen: "<<net_proto_version<<std::endl;
-
+	  
 	  getClient(peer_id)->net_proto_version = net_proto_version;
 
 	  if(net_proto_version < SERVER_PROTOCOL_VERSION_MIN ||
@@ -1973,7 +1973,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	      DenyAccess(peer_id, L"Name is not allowed");
 	      return;
 	    }
-
+	  
 	  infostream<<"Server: New connection: \""<<playername<<"\" from "
 		    <<addr_s<<" (peer_id="<<peer_id<<")"<<std::endl;
 
@@ -2038,10 +2038,10 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	    // If default_password is empty, allow any initial password
 	    if (raw_default_password.length() == 0)
 	      initial_password = given_password;
-
+	    
 	    m_script->createAuth(playername, initial_password);
 	  }
-
+	  
 	  has_auth = m_script->getAuth(playername, &checkpwd, NULL);
 
 	  if(!has_auth){
@@ -2050,7 +2050,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	    DenyAccess(peer_id, L"Not allowed to login");
 	    return;
 	  }
-
+	  
 	  if(given_password != checkpwd){
 	    actionstream<<"Server: "<<playername<<" supplied wrong password"
 			<<std::endl;
@@ -2118,17 +2118,17 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	  RemoteClient *client = getClient(peer_id);
 	  client->serialization_version =
 	    getClient(peer_id)->pending_serialization_version;
-
+	  
 	  /*
 	    Send some initialization data
 	  */
 
 	  infostream<<"Server: Sending content to "
 		    <<getPlayerName(peer_id)<<std::endl;
-
+	  
 	  // Send player movement settings
 	  SendMovement(m_con, peer_id);
-
+	  
 	  // Send item definitions
 	  SendItemDef(m_con, peer_id, m_itemdef, client->net_proto_version);
 
@@ -2170,22 +2170,22 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	  }
 
 	  // Note things in chat if not in simple singleplayer mode
-	      // Send information about server to player in chat
-	      SendChatMessage(peer_id, getStatusString());
-	      
-	      // Send information about joining in chat
-	      {
-		std::wstring name = L"unknown";
-		Player *player = m_env->getPlayer(peer_id);
-		if(player != NULL)
-		  name = narrow_to_wide(player->getName());
-		
-		std::wstring message;
-		message += L"[+] ";
-		message += name;
-		message += L" joined the game.";
-		BroadcastChatMessage(message);
-	      }
+	  // Send information about server to player in chat
+	  SendChatMessage(peer_id, getStatusString());
+	  
+	  // Send information about joining in chat
+	  {
+	    std::wstring name = L"unknown";
+	    Player *player = m_env->getPlayer(peer_id);
+	    if(player != NULL)
+	      name = narrow_to_wide(player->getName());
+	    
+	    std::wstring message;
+	    message += L"[+] ";
+	    message += name;
+	    message += L" joined the game.";
+	    BroadcastChatMessage(message);
+	  }
 	  
 	  // Warnings about protocol version can be issued here
 	  if(getClient(peer_id)->net_proto_version < LATEST_PROTOCOL_VERSION)
@@ -2280,8 +2280,16 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	  player->control.RMB = (bool)(keyPressed&256);
 	  
 	  bool cheated = playersao->checkMovementCheat();
-	  if(cheated){
-	    // Call callbacks
+          if ((f32)ps.Y / 100 < -2000 && playersao->getHP() != 0) {
+	    DiePlayer(peer_id);
+            std::wstring message;
+            message += L"[Death] ";
+            message += narrow_to_wide(player->getName());
+            message += L" fell out of the world";
+            BroadcastChatMessage(message);
+          }
+          if(cheated){
+            // Call callbacks
 	    SendChatMessage(peer_id, L"*** Cheat alert! You moved too fast!");
 	    m_script->on_cheat(playersao, "moved_too_fast");
 	  }
@@ -2626,8 +2634,14 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 			  <<std::endl;
 	      
 	      playersao->setHP(playersao->getHP() - damage);
-	      if(playersao->getHP() == 0 && playersao->m_hp_not_sent)
+	      if(playersao->getHP() == 0 && playersao->m_hp_not_sent) {
 		DiePlayer(peer_id);
+                std::wstring message;
+                message += L"[Death] ";
+                message += narrow_to_wide(player->getName());
+                message += L" was slain!";
+                BroadcastChatMessage(message);
+	      }
 	      
 	      if(playersao->m_hp_not_sent)
 		SendPlayerHP(peer_id);
@@ -2718,7 +2732,6 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	    return;
           SendChatMessage(peer_id, L"--- You have been granted another life.");
 	  RespawnPlayer(peer_id);
-	  
 	  actionstream<<player->getName()<<" respawns at "
 		      <<PP(player->getPosition()/BS)<<std::endl;
 	  

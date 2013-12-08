@@ -1113,13 +1113,16 @@ void the_game(
 	    }
 	    if(input->wasKeyDown(EscapeKey)){
 	      connect_aborted = true;
+              wchar_t* text = wgettext("Connect aborted [Esc]");
+              draw_load_screen(text, device, font, dtime, 100);
+              delete[] text;
 	      infostream<<"Connect aborted [Escape]"<<std::endl;
 	      break;
 	    }
 	    
 	    // Display status
 	    {
-	      wchar_t* text = wgettext("Connecting to server...");
+	      wchar_t* text = wgettext("Connecting...");
 	      draw_load_screen(text, device, font, dtime, 100);
 	      delete[] text;
 	    }
@@ -1216,21 +1219,21 @@ void the_game(
 	    int progress=0;
 	    if (!client.itemdefReceived())
 	      {
-		wchar_t* text = wgettext("Porting Minecraft...");
-		progress = 0;
+		wchar_t* text = wgettext("Fetching items...");
+		progress = 5;
 		draw_load_screen(text, device, font, dtime, progress);
 		delete[] text;
 	      }
 	    else if (!client.nodedefReceived())
 	      {
-		wchar_t* text = wgettext("Deleting hard drive...");
+		wchar_t* text = wgettext("Fetching blocks...");
 		progress = 25;
 		draw_load_screen(text, device, font, dtime, progress);
 		delete[] text;
 	      }
 	    else
 	      {
-		wchar_t* text = wgettext("Spawning nyan cats...");
+		wchar_t* text = wgettext("Fetching media...");
 		progress = 50+client.mediaReceiveProgress()*50+0.5;
 		draw_load_screen(text, device, font, dtime, progress);
 		delete[] text;
@@ -1555,11 +1558,11 @@ void the_game(
 	  /*
 	    Busytime average and jitter calculation
 	  */
-
+	  
 	  static f32 busytime_avg1 = 0.0;
 	  busytime_avg1 = busytime_avg1 * 0.98 + busytime * 0.02;
 	  f32 busytime_jitter1 = busytime - busytime_avg1;
-		
+	  
 	  static f32 busytime_jitter1_max_sample = 0.0;
 	  static f32 busytime_jitter1_min_sample = 0.0;
 	  {
@@ -1579,11 +1582,11 @@ void the_game(
 	      jitter1_min = 0.0;
 	    }
 	  }
-
+	  
 	  /*
 	    Handle miscellaneous stuff
 	  */
-		
+	  
 	  if(client.accessDenied())
 	    {
 	      error_message = L"Access denied. Reason: "
@@ -1591,38 +1594,38 @@ void the_game(
 	      errorstream<<wide_to_narrow(error_message)<<std::endl;
 	      break;
 	    }
-
+	  
 	  if(g_gamecallback->disconnect_requested)
 	    {
 	      g_gamecallback->disconnect_requested = false;
 	      break;
 	    }
-
+	  
 	  if(g_gamecallback->changepassword_requested)
 	    {
 	      (new GUIPasswordChange(guienv, guiroot, -1,
 				     &g_menumgr, &client))->drop();
 	      g_gamecallback->changepassword_requested = false;
 	    }
-
+	  
 	  if(g_gamecallback->changevolume_requested)
 	    {
 	      (new GUIVolumeChange(guienv, guiroot, -1,
 				   &g_menumgr, &client))->drop();
 	      g_gamecallback->changevolume_requested = false;
 	    }
-
+	  
 	  /* Process TextureSource's queue */
 	  tsrc->processQueue();
-
+	  
 	  /* Process ItemDefManager's queue */
 	  itemdef->processQueue(gamedef);
-
+	  
 	  /*
 	    Process ShaderSource's queue
 	  */
 	  shsrc->processQueue();
-
+	  
 	  /*
 	    Random calculations
 	  */
@@ -1630,19 +1633,19 @@ void the_game(
 	  screensize = driver->getScreenSize();
 	  v2s32 displaycenter(screensize.X/2,screensize.Y/2);
 	  //bool screensize_changed = screensize != last_screensize;
-
-			
+	  
+	  
 	  // Update HUD values
 	  hud.screensize    = screensize;
 	  hud.displaycenter = displaycenter;
 	  hud.resizeHotbar();
-		
+	  
 	  // Hilight boxes collected during the loop and displayed
 	  std::vector<aabb3f> hilightboxes;
-		
+	  
 	  // Info text
 	  std::wstring infotext;
-
+	  
 	  /*
 	    Debug info for client
 	  */
@@ -1655,7 +1658,7 @@ void the_game(
 		client.printDebugInfo(infostream);
 	      }
 	  }
-
+	  
 	  /*
 	    Profiler
 	  */
@@ -1672,10 +1675,10 @@ void the_game(
 		infostream<<"Profiler:"<<std::endl;
 		g_profiler->print(infostream);
 	      }
-
+	      
 	      update_profiler_gui(guitext_profiler, font, text_height,
 				  show_profiler, show_profiler_max);
-
+	      
 	      g_profiler->clear();
 	    }
 	  
@@ -1694,14 +1697,14 @@ void the_game(
 	    {
 	      gui_chat_console->closeConsoleAtOnce();
 	    }
-
+	  
 	  // Input handler step() (used by the random input generator)
 	  input->step(dtime);
-
+	  
 	  // Increase timer for doubleclick of "jump"
 	  if(g_settings->getBool("doubletap_jump") && jump_timer <= 0.2)
 	    jump_timer += dtime;
-
+	  
 	  /*
 	    Launch menus and trigger stuff according to keys
 	  */
@@ -1719,15 +1722,15 @@ void the_game(
 	    {
 	      infostream<<"the_game: "
 			<<"Launching inventory"<<std::endl;
-			
+	      
 	      GUIFormSpecMenu *menu =
 		new GUIFormSpecMenu(device, guiroot, -1,
 				    &g_menumgr,
 				    &client, gamedef, tsrc);
-
+	      
 	      InventoryLocation inventoryloc;
 	      inventoryloc.setCurrentPlayer();
-
+	      
 	      PlayerInventoryFormSource *src = new PlayerInventoryFormSource(&client);
 	      assert(src);
 	      menu->setFormSpec(src->getForm(), inventoryloc);
@@ -1742,7 +1745,7 @@ void the_game(
 	      // It will delete itself by itself
 	      (new GUIPauseMenu(guienv, guiroot, -1, g_gamecallback,
 				&g_menumgr, simple_singleplayer_mode))->drop();
-
+	      
 	      // Move mouse cursor on top of the disconnect button
 	      if(simple_singleplayer_mode)
 		input->setMousePos(displaycenter.X, displaycenter.Y+0);
@@ -1752,7 +1755,7 @@ void the_game(
 	  else if(input->wasKeyDown(getKeySetting("keymap_chat")))
 	    {
 	      TextDest *dest = new TextDestChat(&client);
-
+	      
 	      (new GUITextInputMenu(guienv, guiroot, -1,
 				    &g_menumgr, dest,
 				    L""))->drop();
@@ -1760,11 +1763,11 @@ void the_game(
 	  else if(input->wasKeyDown(getKeySetting("keymap_cmd")))
 	    {
 	      TextDest *dest = new TextDestChat(&client);
-
+	      
 	      (new GUITextInputMenu(guienv, guiroot, -1,
 				    &g_menumgr, dest,
 				    L"/"))->drop();
-	    }
+	    }  
 	  else if(input->wasKeyDown(getKeySetting("keymap_console")))
 	    {
 	      if (!gui_chat_console->isOpenInhibited())
