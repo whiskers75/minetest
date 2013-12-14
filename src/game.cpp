@@ -243,7 +243,7 @@ PointedThing getPointedThing(Client *client, v3f player_position,
     {
       selected_object = client->getSelectedActiveObject(d*BS,
 							camera_position, shootline);
-
+      
       if(selected_object != NULL)
 	{
 	  if(selected_object->doShowSelectionBox())
@@ -308,7 +308,7 @@ PointedThing getPointedThing(Client *client, v3f player_position,
 	    continue;
 
 	  std::vector<aabb3f> boxes = n.getSelectionBoxes(nodedef);
-
+	  
 	  v3s16 np(x,y,z);
 	  v3f npf = intToFloat(np, BS);
 
@@ -1106,7 +1106,7 @@ void the_game(
 	    }
 	    // Break conditions
 	    if(client.accessDenied()){
-	      error_message = L"Access denied. Reason: "
+	      error_message = L""
 		+client.accessDeniedReason();
 	      errorstream<<wide_to_narrow(error_message)<<std::endl;
 	      break;
@@ -1122,7 +1122,7 @@ void the_game(
 	    
 	    // Display status
 	    {
-	      wchar_t* text = wgettext("Connecting...");
+	      wchar_t* text = wgettext("Connecting to server...");
 	      draw_load_screen(text, device, font, dtime, 100);
 	      delete[] text;
 	    }
@@ -1219,22 +1219,22 @@ void the_game(
 	    int progress=0;
 	    if (!client.itemdefReceived())
 	      {
-		wchar_t* text = wgettext("Fetching items...");
+		wchar_t* text = wgettext("Logging in...");
 		progress = 5;
 		draw_load_screen(text, device, font, dtime, progress);
 		delete[] text;
 	      }
 	    else if (!client.nodedefReceived())
 	      {
-		wchar_t* text = wgettext("Fetching blocks...");
-		progress = 25;
+                wchar_t* text = wgettext("Logging in...");
+		progress = 10;
 		draw_load_screen(text, device, font, dtime, progress);
 		delete[] text;
 	      }
 	    else
 	      {
-		wchar_t* text = wgettext("Fetching media...");
-		progress = 50+client.mediaReceiveProgress()*50+0.5;
+		wchar_t* text = wgettext("Loading media...");
+		progress = 10 + client.mediaReceiveProgress()*90;
 		draw_load_screen(text, device, font, dtime, progress);
 		delete[] text;
 	      }
@@ -1269,7 +1269,7 @@ void the_game(
       
       if(!got_content){
 	if(error_message == L"" && !content_aborted){
-	  error_message = L"Something failed";
+	  error_message = L"A mysterious error appeared!";
 	  errorstream<<wide_to_narrow(error_message)<<std::endl;
 	}
 	// Break out of client scope
@@ -1335,7 +1335,7 @@ void the_game(
 							   false, false);
       // Second line of debug text
       gui::IGUIStaticText *guitext2 = guienv->addStaticText(
-							    L"",
+							    L"Modded edition by whiskers75",
 							    core::rect<s32>(5, 5+(text_height+5)*1, 795, (5+text_height)*2),
 							    false, false);
       // At the middle of the screen
@@ -1589,7 +1589,7 @@ void the_game(
 	  
 	  if(client.accessDenied())
 	    {
-	      error_message = L"Access denied. Reason: "
+	      error_message = L"-!- Server: "
 		+client.accessDeniedReason();
 	      errorstream<<wide_to_narrow(error_message)<<std::endl;
 	      break;
