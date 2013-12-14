@@ -650,7 +650,7 @@ public:
   SimpleSoundSpec m_player_step_sound;
   SimpleSoundSpec m_player_leftpunch_sound;
   SimpleSoundSpec m_player_rightpunch_sound;
-
+  
   SoundMaker(ISoundManager *sound, INodeDefManager *ndef):
     m_sound(sound),
     m_ndef(ndef),
@@ -2244,7 +2244,6 @@ void the_game(
 					 &g_menumgr, respawner);
 		    menu->drop();
 		    
-		    chat_backend.addMessage(L"", L"Death has overcome you! D: [respawn]");
 		    
 		    /* Handle visualization */
 		    

@@ -2280,14 +2280,6 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	  player->control.RMB = (bool)(keyPressed&256);
 	  
 	  bool cheated = playersao->checkMovementCheat();
-          if ((f32)ps.Y / 100 < -2000 && playersao->getHP() != 0) {
-	    DiePlayer(peer_id);
-            std::wstring message;
-            message += L"[Death] ";
-            message += narrow_to_wide(player->getName());
-            message += L" fell out of the world";
-            BroadcastChatMessage(message);
-          }
           if(cheated){
             // Call callbacks
 	    SendChatMessage(peer_id, L"*** Cheat alert! You moved too fast!");
