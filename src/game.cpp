@@ -76,71 +76,71 @@
 
 struct TextDestChat : public TextDest
 {
-  TextDestChat(Client *client)
-  {
-    m_client = client;
-  }
-  void gotText(std::wstring text)
-  {
-    m_client->typeChatMessage(text);
-  }
-  void gotText(std::map<std::string, std::string> fields)
-  {
-    m_client->typeChatMessage(narrow_to_wide(fields["text"]));
-  }
+TextDestChat(Client *client)
+{
+m_client = client;
+}
+void gotText(std::wstring text)
+{
+m_client->typeChatMessage(text);
+}
+void gotText(std::map<std::string, std::string> fields)
+{
+m_client->typeChatMessage(narrow_to_wide(fields["text"]));
+}
 
-  Client *m_client;
+Client *m_client;
 };
 
 struct TextDestNodeMetadata : public TextDest
 {
-  TextDestNodeMetadata(v3s16 p, Client *client)
-  {
-    m_p = p;
-    m_client = client;
-  }
-  // This is deprecated I guess? -celeron55
-  void gotText(std::wstring text)
-  {
-    std::string ntext = wide_to_narrow(text);
-    infostream<<"Submitting 'text' field of node at ("<<m_p.X<<","
-	      <<m_p.Y<<","<<m_p.Z<<"): "<<ntext<<std::endl;
-    std::map<std::string, std::string> fields;
-    fields["text"] = ntext;
-    m_client->sendNodemetaFields(m_p, "", fields);
-  }
-  void gotText(std::map<std::string, std::string> fields)
-  {
-    m_client->sendNodemetaFields(m_p, "", fields);
-  }
+TextDestNodeMetadata(v3s16 p, Client *client)
+{
+m_p = p;
+m_client = client;
+}
+// This is deprecated I guess? -celeron55
+void gotText(std::wstring text)
+{
+std::string ntext = wide_to_narrow(text);
+infostream<<"Submitting 'text' field of node at ("<<m_p.X<<","
+<<m_p.Y<<","<<m_p.Z<<"): "<<ntext<<std::endl;
+std::map<std::string, std::string> fields;
+fields["text"] = ntext;
+m_client->sendNodemetaFields(m_p, "", fields);
+}
+void gotText(std::map<std::string, std::string> fields)
+{
+m_client->sendNodemetaFields(m_p, "", fields);
+}
 
-  v3s16 m_p;
-  Client *m_client;
+v3s16 m_p;
+Client *m_client;
 };
 
 struct TextDestPlayerInventory : public TextDest
 {
-  TextDestPlayerInventory(Client *client)
-  {
-    m_client = client;
-    m_formname = "";
-  }
-  TextDestPlayerInventory(Client *client, std::string formname)
-  {
-    m_client = client;
-    m_formname = formname;
-  }
-  void gotText(std::map<std::string, std::string> fields)
-  {
-    m_client->sendInventoryFields(m_formname, fields);
-  }
+TextDestPlayerInventory(Client *client)
+{
+m_client = client;
+m_formname = "";
+}
+TextDestPlayerInventory(Client *client, std::string formname)
+{
+m_client = client;
+m_formname = formname;
+}
+void gotText(std::map<std::string, std::string> fields)
+{
+m_client->sendInventoryFields(m_formname, fields);
+}
 
-  void setFormName(std::string formname) {
-    m_formname = formname;
-  }
+void setFormName(std::string formname) {
+m_formname = formname;
+}
 
-  Client *m_client;
-  std::string m_formname;
+Client *m_client;
+std::string m_formname;
 };
 
 /* Respawn menu callback */
@@ -148,18 +148,18 @@ struct TextDestPlayerInventory : public TextDest
 class MainRespawnInitiator: public IRespawnInitiator
 {
 public:
-  MainRespawnInitiator(bool *active, Client *client):
-    m_active(active), m_client(client)
-  {
-    *m_active = true;
-  }
+MainRespawnInitiator(bool *active, Client *client):
+  m_active(active), m_client(client)
+{
+*m_active = true;
+}
   void respawn()
   {
-    *m_active = false;
-    m_client->sendRespawn();
-  }
+*m_active = false;
+m_client->sendRespawn();
+}
 private:
-  bool *m_active;
+		     bool *m_active;
   Client *m_client;
 };
 
@@ -2626,12 +2626,11 @@ void the_game(
 		  
 		  if(params.diggable == false)
 		    {
-		      // I guess nobody will wait for this long
-		      dig_time_complete = 10000000.0;
+		      // I guess nobody will wait for this long - or not. fastbreak!
+		      
 		    }
 		  else
 		    {
-		      dig_time_complete = params.time;
 		      if (g_settings->getBool("enable_particles"))
 			{
 			  const ContentFeatures &features =
