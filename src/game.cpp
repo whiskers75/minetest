@@ -2932,14 +2932,14 @@ void the_game(
 	  /*
 	    Update particles
 	  */
-
+	  
 	  allparticles_step(dtime, client.getEnv());
 	  allparticlespawners_step(dtime, client.getEnv());
-		
+	  
 	  /*
 	    Fog
 	  */
-		
+	  
 	  if(g_settings->getBool("enable_fog") && !force_fog_off)
 	    {
 	      driver->setFog(
@@ -2964,13 +2964,13 @@ void the_game(
 			     false // range fog
 			     );
 	    }
-
+	  
 	  /*
 	    Update gui stuff (0ms)
 	  */
-
+	  
 	  //TimeTaker guiupdatetimer("Gui updating");
-		
+	  
 	  if(show_debug)
 	    {
 	      static float drawtime_avg = 0;
@@ -2981,7 +2981,7 @@ void the_game(
 		scenetime_avg = scenetime_avg * 0.95 + (float)scenetime*0.05;
 		static float endscenetime_avg = 0;
 		endscenetime_avg = endscenetime_avg * 0.95 + (float)endscenetime*0.05;*/
-			
+	      
 	      std::ostringstream os(std::ios_base::binary);
 	      os<<std::fixed
 		<<"Minetest "<<minetest_version_hash
@@ -3001,7 +3001,7 @@ void the_game(
 	  else if(show_hud || show_chat)
 	    {
 	      std::ostringstream os(std::ios_base::binary);
-	      os<<"Minetest "<<minetest_version_hash;
+	      os<<"whiskers75/Minetest "<<minetest_version_hash;
 	      guitext->setText(narrow_to_wide(os.str()).c_str());
 	      guitext->setVisible(true);
 	    }
@@ -3009,7 +3009,7 @@ void the_game(
 	    {
 	      guitext->setVisible(false);
 	    }
-		
+	  
 	  if(show_debug)
 	    {
 	      std::ostringstream os(std::ios_base::binary);
@@ -3029,12 +3029,12 @@ void the_game(
 	    {
 	      guitext2->setVisible(false);
 	    }
-		
+	  
 	  {
 	    guitext_info->setText(infotext.c_str());
 	    guitext_info->setVisible(show_hud && g_menumgr.menuCount() == 0);
 	  }
-
+	  
 	  {
 	    float statustext_time_max = 1.5;
 	    if(!statustext.empty())
@@ -3048,7 +3048,7 @@ void the_game(
 	      }
 	    guitext_status->setText(statustext.c_str());
 	    guitext_status->setVisible(!statustext.empty());
-
+	    
 	    if(!statustext.empty())
 	      {
 		s32 status_y = screensize.Y - 130;
@@ -3059,7 +3059,7 @@ void the_game(
 				     status_y
 				     );
 		guitext_status->setRelativePosition(rect);
-
+		
 		// Fade out
 		video::SColor initial_color(255,0,0,0);
 		if(guienv->getSkin())
@@ -3075,7 +3075,7 @@ void the_game(
 		guitext_status->enableOverrideColor(true);
 	      }
 	  }
-		
+	  
 	  /*
 	    Get chat messages from client
 	  */
@@ -3094,12 +3094,12 @@ void the_game(
 	      }
 	    // Remove old messages
 	    chat_backend.step(dtime);
-
+	    
 	    // Display all messages in a static text element
 	    u32 recent_chat_count = chat_backend.getRecentBuffer().getLineCount();
 	    std::wstring recent_chat = chat_backend.getRecentChat();
 	    guitext_chat->setText(recent_chat.c_str());
-
+	    
 	    // Update gui element size and position
 	    s32 chat_y = 5+(text_height+5);
 	    if(show_debug)
@@ -3111,16 +3111,16 @@ void the_game(
 				 chat_y + guitext_chat->getTextHeight()
 				 );
 	    guitext_chat->setRelativePosition(rect);
-
+	    
 	    // Don't show chat if disabled or empty or profiler is enabled
 	    guitext_chat->setVisible(show_chat && recent_chat_count != 0
 				     && !show_profiler);
 	  }
-
+	  
 	  /*
 	    Inventory
 	  */
-		
+	  
 	  if(client.getPlayerItem() != new_playeritem)
 	    {
 	      client.selectPlayerItem(new_playeritem);
@@ -3129,7 +3129,7 @@ void the_game(
 	    {
 	      //infostream<<"Updating local inventory"<<std::endl;
 	      client.getLocalInventory(local_inventory);
-			
+	      
 	      update_wielded_item_trigger = true;
 	    }
 	  if(update_wielded_item_trigger)
@@ -3142,7 +3142,7 @@ void the_game(
 		item = mlist->getItem(client.getPlayerItem());
 	      camera.wield(item, client.getPlayerItem());
 	    }
-
+	  
 	  /*
 	    Update block draw list every 200ms or when camera direction has
 	    changed much
@@ -3154,13 +3154,13 @@ void the_game(
 	    client.getEnv().getClientMap().updateDrawList(driver);
 	    update_draw_list_last_cam_dir = camera_direction;
 	  }
-
+	  
 	  /*
 	    Drawing begins
 	  */
-
+	  
 	  TimeTaker tt_draw("mainloop: draw");
-		
+	  
 	  {
 	    TimeTaker timer("beginScene");
 	    //driver->beginScene(false, true, bgcolor);
@@ -3168,35 +3168,35 @@ void the_game(
 	    driver->beginScene(true, true, skycolor);
 	    beginscenetime = timer.stop(true);
 	  }
-		
+	  
 	  //timer3.stop();
-	
+	  
 	  //infostream<<"smgr->drawAll()"<<std::endl;
 	  {
 	    TimeTaker timer("smgr");
 	    smgr->drawAll();
-			
+	    
 	    if(g_settings->getBool("anaglyph"))
 	      {
 		irr::core::vector3df oldPosition = camera.getCameraNode()->getPosition();
 		irr::core::vector3df oldTarget   = camera.getCameraNode()->getTarget();
-
+		
 		irr::core::matrix4 startMatrix   = camera.getCameraNode()->getAbsoluteTransformation();
-
+		
 		irr::core::vector3df focusPoint  = (camera.getCameraNode()->getTarget() -
 						    camera.getCameraNode()->getAbsolutePosition()).setLength(1) +
 		  camera.getCameraNode()->getAbsolutePosition() ;
-
+		
 		//Left eye...
 		irr::core::vector3df leftEye;
 		irr::core::matrix4   leftMove;
-
+		
 		leftMove.setTranslation( irr::core::vector3df(-g_settings->getFloat("anaglyph_strength"),0.0f,0.0f) );
 		leftEye=(startMatrix*leftMove).getTranslation();
-
+		
 		//clear the depth buffer, and color
 		driver->beginScene( true, true, irr::video::SColor(0,200,200,255) );
-
+		
 		driver->getOverrideMaterial().Material.ColorMask = irr::video::ECP_RED;
 		driver->getOverrideMaterial().EnableFlags  = irr::video::EMF_COLOR_MASK;
 		driver->getOverrideMaterial().EnablePasses = irr::scene::ESNRP_SKY_BOX + 
@@ -3204,28 +3204,28 @@ void the_game(
 		  irr::scene::ESNRP_TRANSPARENT +
 		  irr::scene::ESNRP_TRANSPARENT_EFFECT +
 		  irr::scene::ESNRP_SHADOW;
-
+		
 		camera.getCameraNode()->setPosition( leftEye );
 		camera.getCameraNode()->setTarget( focusPoint );
-
+		
 		smgr->drawAll(); // 'smgr->drawAll();' may go here
-
+		
 		driver->setTransform(video::ETS_WORLD, core::IdentityMatrix);
-
+		
 		if (show_hud)
 		  hud.drawSelectionBoxes(hilightboxes);
-
-
+		
+		
 		//Right eye...
 		irr::core::vector3df rightEye;
 		irr::core::matrix4   rightMove;
-
+		
 		rightMove.setTranslation( irr::core::vector3df(g_settings->getFloat("anaglyph_strength"),0.0f,0.0f) );
 		rightEye=(startMatrix*rightMove).getTranslation();
-
+		
 		//clear the depth buffer
 		driver->clearZBuffer();
-
+		
 		driver->getOverrideMaterial().Material.ColorMask = irr::video::ECP_GREEN + irr::video::ECP_BLUE;
 		driver->getOverrideMaterial().EnableFlags  = irr::video::EMF_COLOR_MASK;
 		driver->getOverrideMaterial().EnablePasses = irr::scene::ESNRP_SKY_BOX +
@@ -3233,50 +3233,50 @@ void the_game(
 		  irr::scene::ESNRP_TRANSPARENT +
 		  irr::scene::ESNRP_TRANSPARENT_EFFECT +
 		  irr::scene::ESNRP_SHADOW;
-
+		
 		camera.getCameraNode()->setPosition( rightEye );
 		camera.getCameraNode()->setTarget( focusPoint );
-
+		
 		smgr->drawAll(); // 'smgr->drawAll();' may go here
-
+		
 		driver->setTransform(video::ETS_WORLD, core::IdentityMatrix);
-
+		
 		if (show_hud)
 		  hud.drawSelectionBoxes(hilightboxes);
-
-
+		
+		
 		//driver->endScene();
-
+		
 		driver->getOverrideMaterial().Material.ColorMask=irr::video::ECP_ALL;
 		driver->getOverrideMaterial().EnableFlags=0;
 		driver->getOverrideMaterial().EnablePasses=0;
-
+		
 		camera.getCameraNode()->setPosition( oldPosition );
 		camera.getCameraNode()->setTarget( oldTarget );
 	      }
-
+	    
 	    scenetime = timer.stop(true);
 	  }
-		
+	  
 	  {
 	    //TimeTaker timer9("auxiliary drawings");
 	    // 0ms
-		
+	    
 	    //timer9.stop();
 	    //TimeTaker //timer10("//timer10");
-		
+	    
 	    video::SMaterial m;
 	    //m.Thickness = 10;
 	    m.Thickness = 3;
 	    m.Lighting = false;
 	    driver->setMaterial(m);
-
+	    
 	    driver->setTransform(video::ETS_WORLD, core::IdentityMatrix);
 	    if((!g_settings->getBool("anaglyph")) && (show_hud))
 	      {
 		hud.drawSelectionBoxes(hilightboxes);
 	      }
-
+	    
 	    /*
 	      Wielded tool
 	    */
@@ -3285,14 +3285,14 @@ void the_game(
 		// Warning: This clears the Z buffer.
 		camera.drawWieldedTool();
 	      }
-
+	    
 	    /*
 	      Post effects
 	    */
 	    {
 	      client.getEnv().getClientMap().renderPostFx();
 	    }
-
+	    
 	    /*
 	      Profiler graph
 	    */
@@ -3300,19 +3300,19 @@ void the_game(
 	      {
 		graph.draw(10, screensize.Y - 10, driver, font);
 	      }
-
+	    
 	    /*
 	      Draw crosshair
 	    */
 	    if (show_hud)
 	      hud.drawCrosshair();
-			
+	    
 	  } // timer
-
+	  
 	  //timer10.stop();
 	  //TimeTaker //timer11("//timer11");
-
-
+	  
+	  
 	  /*
 	    Draw hotbar
 	  */
@@ -3321,7 +3321,7 @@ void the_game(
 	      hud.drawHotbar(v2s32(displaycenter.X, screensize.Y),
 			     client.getHP(), client.getPlayerItem(), client.getBreath());
 	    }
-
+	  
 	  /*
 	    Damage flash
 	  */
@@ -3331,10 +3331,10 @@ void the_game(
 	      driver->draw2DRectangle(color,
 				      core::rect<s32>(0,0,screensize.X,screensize.Y),
 				      NULL);
-			
+	      
 	      damage_flash -= 100.0*dtime;
 	    }
-
+	  
 	  /*
 	    Damage camera tilt
 	  */
@@ -3344,19 +3344,19 @@ void the_game(
 	      if(player->hurt_tilt_timer < 0)
 		player->hurt_tilt_strength = 0;
 	    }
-
+	  
 	  /*
 	    Draw lua hud items
 	  */
 	  if (show_hud)
 	    hud.drawLuaElements();
-
+	  
 	  /*
 	    Draw gui
 	  */
 	  // 0-1ms
 	  guienv->drawAll();
-
+	  
 	  /*
 	    End scene
 	  */
@@ -3365,29 +3365,30 @@ void the_game(
 	    driver->endScene();
 	    endscenetime = timer.stop(true);
 	  }
-
+	  
 	  drawtime = tt_draw.stop(true);
 	  g_profiler->graphAdd("mainloop_draw", (float)drawtime/1000.0f);
-
+	  
 	  /*
 	    End of drawing
 	  */
-
+	  
 	  static s16 lastFPS = 0;
 	  //u16 fps = driver->getFPS();
 	  u16 fps = (1.0/dtime_avg1);
-
+	  
 	  if (lastFPS != fps)
 	    {
-	      core::stringw str = L"Minetest [";
+	      core::stringw str = L"whiskers75/Minetest [";
 	      str += driver->getName();
-	      str += "] FPS=";
+	      str += ", ";
 	      str += fps;
-
+	      str += "]";
+	      
 	      device->setWindowCaption(str.c_str());
 	      lastFPS = fps;
 	    }
-
+	  
 	  /*
 	    Log times and stuff for visualization
 	  */
@@ -3395,7 +3396,7 @@ void the_game(
 	  g_profiler->graphGet(values);
 	  graph.put(values);
 	}
-
+      
       /*
 	Drop stuff
       */
@@ -3406,14 +3407,14 @@ void the_game(
       if (sky)
 	sky->drop();
       clear_particles();
-	
+      
       /*
 	Draw a "shutting down" screen, which will be shown while the map
 	generator and other stuff quits
       */
       {
 	/*gui::IGUIStaticText *gui_shuttingdowntext = */
-	wchar_t* text = wgettext("Shutting down stuff...");
+	wchar_t* text = wgettext("Loading...");
 	draw_load_screen(text, device, font, 0, -1, false);
 	delete[] text;
 	/*driver->beginScene(true, true, video::SColor(255,0,0,0));
@@ -3421,10 +3422,10 @@ void the_game(
 	  driver->endScene();
 	  gui_shuttingdowntext->remove();*/
       }
-
+      
       chat_backend.addMessage(L"", L"# Disconnected.");
       chat_backend.addMessage(L"", L"");
-
+      
       // Client scope (client is destructed before destructing *def and tsrc)
     }while(0);
   } // try-catch
@@ -3445,20 +3446,20 @@ void the_game(
       errorstream<<e.what()<<std::endl;
       error_message = narrow_to_wide(e.what()) + wgettext("\nCheck debug.txt for details.");
     }
-
-
-	
+  
+  
+  
   if(!sound_is_dummy)
     delete sound;
-
+  
   //has to be deleted first to stop all server threads
   delete server;
-
+  
   delete tsrc;
   delete shsrc;
   delete nodedef;
   delete itemdef;
-
+  
   //extended resource accounting
   infostream << "Irrlicht resources after cleanup:" << std::endl;
   infostream << "\tRemaining meshes   : "
