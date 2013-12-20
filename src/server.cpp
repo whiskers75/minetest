@@ -449,7 +449,7 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
 		{
 		block_is_invalid = true;
 		}*/
-
+	      
 #if 0
 	      v2s16 p2d(p.X, p.Z);
 	      ServerMap *map = (ServerMap*)(&server->m_env->getMap());
@@ -474,7 +474,7 @@ void RemoteClient::GetNextBlocks(Server *server, float dtime,
 		}
 #endif
 	    }
-
+	  
 	  /*
 	    If block has been marked to not exist on disk (dummy)
 	    and generating new ones is not wanted, skip block.
@@ -2858,6 +2858,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 	  */
 	  if(!checkPriv(player->getName(), "interact"))
 	    {
+              SendChatMessage(peer_id, L"*** You are not allowed to interact.");
 	      actionstream<<player->getName()<<" attempted to interact with "
 			  <<pointed.dump()<<" without 'interact' privilege"
 			  <<std::endl;
@@ -2964,14 +2965,14 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		  
 		  /* Cheat prevention */
 		  bool is_valid_dig = true;
-		  if(!isSingleplayer() && !g_settings->getBool("disable_anticheat"))
+		  if(true)
 		    {
 		      v3s16 nocheat_p = playersao->getNoCheatDigPos();
 		      float nocheat_t = playersao->getNoCheatDigTime();
 		      playersao->noCheatDigEnd();
 		      // If player didn't start digging this, ignore dig
 		      if(nocheat_p != p_under){
-			infostream<<"Server: NoCheat: "<<player->getName()
+			actionstream<<"Server: NoCheat: "<<player->getName()
 				  <<" started digging "
 				  <<PP(nocheat_p)<<" and completed digging "
 				  <<PP(p_under)<<"; not digging."<<std::endl;
@@ -2999,7 +3000,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		      }
 		      // If can't dig, ignore dig
 		      if(!params.diggable){
-			infostream<<"Server: NoCheat: "<<player->getName()
+			actionstream<<"Server: NoCheat: "<<player->getName()
 				  <<" completed digging "<<PP(p_under)
 				  <<", which is not diggable with tool. not digging."
 				  <<std::endl;
@@ -3014,7 +3015,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 			// Well not our problem then
 		      }
 		      // Clean and long dig
-		      else if(params.time > 2.0 && nocheat_t * 1.2 > params.time){
+		      else if(nocheat_t * 1.1 > params.time){
 			// All is good, but grab time from pool; don't care if
 			// it's actually available
 			playersao->getDigPool().grab(params.time);
@@ -3026,7 +3027,7 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id)
 		      }
 		      // Dig not possible
 		      else{
-			infostream<<"Server: NoCheat: "<<player->getName()
+			actionstream<<"Server: NoCheat: "<<player->getName()
 				  <<" completed digging "<<PP(p_under)
 				  <<"too fast; not digging."<<std::endl;
 			is_valid_dig = false;
