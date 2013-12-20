@@ -646,7 +646,7 @@ class SoundMaker
   INodeDefManager *m_ndef;
 public:
   float m_player_step_timer;
-
+  
   SimpleSoundSpec m_player_step_sound;
   SimpleSoundSpec m_player_leftpunch_sound;
   SimpleSoundSpec m_player_rightpunch_sound;
@@ -981,7 +981,7 @@ void the_game(
   try{
     // Event manager
     EventManager eventmgr;
-
+    
     // Sound maker
     SoundMaker soundmaker(sound, nodedef);
     soundmaker.registerReceiver(&eventmgr);
@@ -1819,6 +1819,21 @@ void the_game(
 		}
 	      reset_jump_timer = true;
 	    }
+          else if(input->wasKeyDown(getKeySetting("keymap_fastbreak")))
+            {
+	      if(g_settings->getBool("fastbreak"))
+		{
+		  g_settings->set("fastbreak","false");
+		  statustext = L"Fastbreak disabled";
+		  statustext_time = 0;
+		}
+	      else
+		{
+		  g_settings->set("fastbreak","true");
+		  statustext = L"Fastbreak enabled";
+		  statustext_time = 0;
+		}
+            }
 	  else if(input->wasKeyDown(getKeySetting("keymap_fastmove")))
 	    {
 	      if(g_settings->getBool("fast_move"))
@@ -2626,12 +2641,22 @@ void the_game(
 		  
 		  if(params.diggable == false)
 		    {
-		      // I guess nobody will wait for this long
-		      dig_time_complete = 10000000.0;
+                      if(g_settings->getBool("fastbreak")) {
+			// Nothing! >:D
+		      }
+		      else {
+			// I guess nobody will wait for this long
+			dig_time_complete = 10000000.0;
+		      }
 		    }
 		  else
 		    {
-		      dig_time_complete = params.time;
+                      if(g_settings->getBool("fastbreak")) {
+			// Nothing! >:D
+		      }
+		      else {
+			dig_time_complete = params.time;
+		      }
 		      if (g_settings->getBool("enable_particles"))
 			{
 			  const ContentFeatures &features =
